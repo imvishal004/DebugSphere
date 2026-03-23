@@ -1,0 +1,57 @@
+version: "3.8"
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: cloudexecx-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: cloudexecx
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: cloudexecx-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: cloudexecx-api
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/cloudexecx:/tmp/cloudexecx
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cloudexecx-worker
+    command: node worker.js
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/cloudexecx:/tmp/cloudexecx
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+  redis_data:
