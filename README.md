@@ -684,7 +684,7 @@ npx vercel --prod
 2. Add your server IP to the IP Access List
 3. Create a database user with read/write permissions
 4. Copy the connection string and set:
-   MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/debugsphere
+   MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/debugsphere
 ```
 
 ### Queue → Redis Cloud
