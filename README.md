@@ -126,7 +126,6 @@ No more googling stack traces. Just write, run, and let AI guide the fix.
 │ (DBaaS) │ │ (Queue) │ │ (AIaaS) │
 └─────────────┘ └───────────────┘ └────────────────┘
 
-text
 
 
 ### Cloud Service Mapping
@@ -141,7 +140,7 @@ text
 | **Security** | JWT, Helmet, rate limiting, Docker sandbox |
 
 ### Auto-Scaling Design
-text
+
 
                     Load Balancer
                    ┌──────┴──────┐
@@ -153,7 +152,7 @@ text
                    └──────┬──────┘
                       NVIDIA NIM
                   (per-failure AI call)
-text
+
 
 
 Workers are completely stateless. Scale horizontally by running more
@@ -335,8 +334,6 @@ DebugSphere/
 └── services/
 └── api.js # + analyzeWithAI() ← UPDATED
 
-text
-
 
 ---
 
@@ -356,34 +353,34 @@ text
 
 ### Step 1 — Clone the repository
 
-```bash
+
 git clone https://github.com/yourname/debugsphere.git
 cd debugsphere
-Step 2 — Start infrastructure
-Bash
+
+### Step 2 — Start infrastructure
+
 
 # Starts MongoDB on :27017 and Redis on :6379
 docker compose up -d mongodb redis
 
 # Verify both are running:
 docker ps
-Step 3 — Build language executor images
-Bash
+### Step 3 — Build language executor images
+
 
 docker build -t debugsphere-python     ./docker/python
 docker build -t debugsphere-java       ./docker/java
 docker build -t debugsphere-cpp        ./docker/cpp
 docker build -t debugsphere-javascript ./docker/javascript
-Step 4 — Configure backend
-Bash
+### Step 4 — Configure backend
+
 
 cd backend
 npm install
 
 # Create your .env file (see Environment Variables section)
 # Minimum required: MONGODB_URI, REDIS_HOST, JWT_SECRET, NVIDIA_API_KEY
-Step 5 — Start backend services
-Bash
+### Step 5 — Start backend services
 
 # Option A — start API + worker together (recommended)
 npm run dev:all
@@ -391,14 +388,13 @@ npm run dev:all
 # Option B — start separately (two terminals)
 npm run dev          # Terminal 1: API server on :5000
 npm run worker:dev   # Terminal 2: BullMQ worker
-Wait for both of these lines before continuing:
 
-text
+Wait for both of these lines before continuing:
 
 ✅  API server running on port 5000
 🔄  Worker listening for jobs …
-Step 6 — Start frontend
-Bash
+
+### Step 6 — Start frontend
 
 # New terminal
 cd frontend
@@ -410,9 +406,8 @@ text
 http://localhost:5173
 Sign up for an account and start coding!
 
-🌍 Environment Variables
+### 🌍 Environment Variables
 backend/.env
-Bash
 
 # ════════════════════════════════════════════════════
 # DebugSphere — Backend Environment Variables
@@ -456,8 +451,8 @@ AI_IDLE_TIMEOUT=30000          # 30s — max gap between chunks
 
 # ── Feature Flag ─────────────────────────────────────
 AI_ENABLED=true                # set to "false" to disable AI globally
-frontend/.env
-Bash
+
+### frontend/.env
 
 # ════════════════════════════════════════════════════
 # DebugSphere — Frontend Environment Variables
@@ -469,35 +464,39 @@ VITE_API_URL=http://localhost:5000/api
 
 # Production — replace with your deployed backend URL
 # VITE_API_URL=https://api.debugsphere.com/api
-📦 npm Scripts
-Backend (cd backend)
-Bash
+
+### 📦 npm Scripts
+### Backend (cd backend)
+
 
 npm run dev          # API server with nodemon (auto-restart)
 npm run start        # API server production (no nodemon)
 npm run worker       # BullMQ worker production
 npm run worker:dev   # BullMQ worker with nodemon
 npm run dev:all      # API + worker together via concurrently
-Frontend (cd frontend)
-Bash
+
+## Frontend (cd frontend)
 
 npm run dev          # Vite dev server with HMR on :5173
 npm run build        # Production build → dist/
 npm run preview      # Preview production build locally
-📡 API Reference
-Authentication
+
+## 📡 API Reference
+### Authentication
 Method	Endpoint	Auth	Description
 POST	/api/auth/register	❌	Create a new account
 POST	/api/auth/login	❌	Sign in, receive JWT
 GET	/api/auth/me	✅	Get current user profile
-Executions
+
+### Executions
 Method	Endpoint	Auth	Rate Limit	Description
 POST	/api/executions	✅	10/min	Submit code for execution
 GET	/api/executions/:id	✅	200/15min	Poll execution status + result
 GET	/api/executions/history	✅	200/15min	Paginated execution history
 GET	/api/executions/stats	✅	200/15min	Aggregate statistics
 POST	/api/executions/:id/debug	✅	5/15min/user	Manual AI re-analysis
-Code Snippets
+
+### Code Snippets
 Method	Endpoint	Auth	Description
 POST	/api/code/save	✅	Save a new snippet
 GET	/api/code/snippets	✅	List all user snippets
@@ -505,7 +504,7 @@ GET	/api/code/snippets/:id	✅	Get a single snippet
 PUT	/api/code/snippets/:id	✅	Update a snippet
 DELETE	/api/code/snippets/:id	✅	Delete a snippet
 Example — Submit and poll execution
-Bash
+
 
 # 1. Submit code
 curl -X POST http://localhost:5000/api/executions \
@@ -542,12 +541,14 @@ curl http://localhost:5000/api/executions/abc123 \
 #     }
 #   }
 # }
-🔒 Security
-Authentication & Authorization
+
+## 🔒 Security
+### Authentication & Authorization
 JWT tokens — signed with JWT_SECRET, expire after JWT_EXPIRES_IN
 All execution and snippet endpoints require a valid Bearer token
 Users can only access their own executions and snippets
-Rate Limiting
+
+## Rate Limiting
 Limiter	Limit	Applies To
 executionLimiter	10 requests / 1 min	POST /api/executions
 aiDebugLimiter	5 requests / 15 min / user	POST /api/executions/:id/debug
@@ -566,13 +567,14 @@ Privileges:    no-new-privileges    (prevents escalation)
 User:          non-root (UID 1000)  (sandboxed)
 Timeout:       10 seconds           (killed if exceeded)
 AutoRemove:    true                 (no leftover containers)
-HTTP Security
+
+### HTTP Security
 Helmet.js — sets secure HTTP headers (CSP, HSTS, X-Frame-Options, etc.)
 CORS — explicit origin allowlist, credentials: true
 Input sanitization — blocklist for dangerous code patterns before execution
-☁️ Production Deployment
-Frontend → Vercel (recommended)
-Bash
+
+## ☁️ Production Deployment
+### Frontend → Vercel (recommended)
 
 cd frontend
 npm run build
