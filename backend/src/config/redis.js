@@ -4,12 +4,23 @@ let connection = null;
 
 function getRedisConnection() {
   if (!connection) {
-    connection = new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
+    const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+
+    connection = new IORedis(redisUrl, {
       maxRetriesPerRequest: null,
+
+      tls: {},   // ⭐ REQUIRED for Upstash
     });
-    connection.on("connect", () => console.log("🔴  Redis connected"));
-    connection.on("error", (err) => console.error("Redis error:", err.message));
+
+    connection.on("connect", () =>
+      console.log("🔴 Redis connected")
+    );
+
+    connection.on("error", (err) =>
+      console.error("Redis error:", err.message)
+    );
   }
+
   return connection;
 }
 
