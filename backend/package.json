@@ -1,5 +1,5 @@
 {
-  "name": "cloudexecx-backend",
+  "name": "debugsphere-backend",
   "version": "1.0.0",
   "description": "CloudExecX API & Worker",
   "main": "server.js",
@@ -10,6 +10,7 @@
     "dev:worker": "nodemon worker.js"
   },
   "dependencies": {
+    "axios": "^1.14.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.1.0",
     "cors": "^2.8.5",

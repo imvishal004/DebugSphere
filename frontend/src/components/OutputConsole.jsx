@@ -1,24 +1,44 @@
 import { Terminal, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import AIDebugPanel from "./AIDebugPanel";   // ← NEW
 
-export default function OutputConsole({ result, isRunning }) {
+export default function OutputConsole({
+  result,
+  isRunning,
+  // ── NEW props for AI debugging ──────────────────────────────
+  isAnalyzing,   // boolean — AI request in flight
+  onAnalyze,     // function — triggers manual AI analysis
+}) {
   const statusIcon = () => {
-    if (isRunning) return <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />;
-    if (!result) return <Terminal className="w-4 h-4 text-slate-500" />;
-    if (result.status === "completed") return <CheckCircle2 className="w-4 h-4 text-green-400" />;
+    if (isRunning)
+      return <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />;
+    if (!result)
+      return <Terminal className="w-4 h-4 text-slate-500" />;
+    if (result.status === "completed")
+      return <CheckCircle2 className="w-4 h-4 text-green-400" />;
     return <XCircle className="w-4 h-4 text-red-400" />;
   };
 
   const statusLabel = () => {
-    if (isRunning) return "Running…";
-    if (!result) return "Ready";
+    if (isRunning)  return "Running…";
+    if (!result)    return "Ready";
     if (result.status === "completed") return "Completed";
-    if (result.status === "timeout") return "Timed Out";
+    if (result.status === "timeout")   return "Timed Out";
     return "Error";
   };
 
+  // Should we show the AI panel?
+  // Only when: execution is done, status is "failed", and we have
+  // an executionId to reference for the manual re-analyze call.
+  const showAIPanel =
+    !isRunning &&
+    result &&
+    result.status === "failed" &&
+    result._id;
+
   return (
     <div className="bg-slate-900 border border-slate-700 rounded-lg flex flex-col">
-      {/* Header */}
+
+      {/* ── Header (unchanged) ──────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700 bg-slate-800/50 rounded-t-lg">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
           {statusIcon()}
@@ -32,7 +52,7 @@ export default function OutputConsole({ result, isRunning }) {
         )}
       </div>
 
-      {/* Body */}
+      {/* ── Body ─────────────────────────────────────────────── */}
       <div className="p-4 font-mono text-sm flex-1 min-h-[120px] max-h-[300px] overflow-auto whitespace-pre-wrap">
         {isRunning && (
           <span className="text-yellow-400 animate-pulse-fast">
@@ -41,19 +61,41 @@ export default function OutputConsole({ result, isRunning }) {
         )}
 
         {!isRunning && !result && (
-          <span className="text-slate-500">Output will appear here after execution.</span>
+          <span className="text-slate-500">
+            Output will appear here after execution.
+          </span>
         )}
 
         {!isRunning && result && (
           <>
-            {result.output && <div className="text-green-300">{result.output}</div>}
-            {result.error && <div className="text-red-400 mt-2">{result.error}</div>}
+            {result.output && (
+              <div className="text-green-300">{result.output}</div>
+            )}
+            {result.error && (
+              <div className="text-red-400 mt-2">{result.error}</div>
+            )}
             {!result.output && !result.error && (
               <span className="text-slate-500">(No output)</span>
             )}
           </>
         )}
       </div>
+
+      {/* ── AI Debug Panel ────────────────────────────────────
+           Rendered OUTSIDE the scrollable body so it doesn't
+           get clipped. Lives between the output and the bottom
+           border of the console card.
+      ─────────────────────────────────────────────────────── */}
+      {showAIPanel && (
+        <div className="px-4 pb-4">
+          <AIDebugPanel
+            aiDebug={result.aiDebug}
+            executionId={result._id}
+            isAnalyzing={isAnalyzing}
+            onAnalyze={onAnalyze}
+          />
+        </div>
+      )}
     </div>
   );
 }
