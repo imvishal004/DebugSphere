@@ -2,6 +2,8 @@
 // Replace your current CORS setup with this robust version
 
 require("dotenv").config();
+require("./worker");
+
 const express = require("express");
 const cors    = require("cors");
 const helmet  = require("helmet");
@@ -71,9 +73,9 @@ app.use(errorHandler);
   await connectDB();
   const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`✅ API server running on port ${PORT}`);
-});
+  app.listen(PORT, () => {
+    console.log(`✅ API server running on port ${PORT}`);
+  });
 })();
 
 module.exports = app;
