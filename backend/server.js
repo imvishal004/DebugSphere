@@ -27,6 +27,7 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",   // CRA / fallback
   "http://127.0.0.1:5173",   // some browsers use 127.0.0.1
   "http://127.0.0.1:5174",
+  "https://debug-sphere.vercel.app",
   process.env.FRONTEND_URL,  // from .env (production URL)
 ].filter(Boolean);           // remove undefined if FRONTEND_URL not set
 
