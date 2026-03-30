@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Zap, Mail, Lock, Loader2 } from "lucide-react";
+import { Bug, Mail, Lock, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading,  setLoading]  = useState(false);
   const { login } = useAuth();
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,22 +28,31 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950">
       <div className="w-full max-w-md">
-        {/* Logo */}
+
+        {/* ── Logo ─────────────────────────────────────────── */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 text-3xl font-bold text-white mb-2">
-            <Zap className="w-8 h-8 text-indigo-400" />
-            Cloud<span className="text-indigo-400">ExecX</span>
+            <div className="p-1.5 bg-indigo-600/20 rounded-xl">
+              <Bug className="w-7 h-7 text-indigo-400" />
+            </div>
+            Debug<span className="text-indigo-400">Sphere</span>
           </div>
-          <p className="text-slate-400">Cloud-Native Code Execution Platform</p>
+          <p className="text-slate-400">AI-Powered Cloud Code Execution & Debugging Platform</p>
         </div>
 
-        {/* Card */}
+        {/* ── Card ─────────────────────────────────────────── */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-xl font-semibold text-white mb-6">Sign in to your account</h2>
+          <h2 className="text-xl font-semibold text-white mb-6">
+            Sign in to your account
+          </h2>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+
+            {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1.5">Email</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1.5">
+                Email
+              </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
@@ -57,8 +66,11 @@ export default function Login() {
               </div>
             </div>
 
+            {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1.5">Password</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1.5">
+                Password
+              </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
@@ -72,23 +84,29 @@ export default function Login() {
               </div>
             </div>
 
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition flex items-center justify-center gap-2"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {loading ? "Signing in…" : "Sign In"}
             </button>
+
           </form>
 
           <p className="mt-6 text-center text-sm text-slate-400">
             Don't have an account?{" "}
-            <Link to="/signup" className="text-indigo-400 hover:text-indigo-300 font-medium">
+            <Link
+              to="/signup"
+              className="text-indigo-400 hover:text-indigo-300 font-medium"
+            >
               Sign up
             </Link>
           </p>
         </div>
+
       </div>
     </div>
   );
