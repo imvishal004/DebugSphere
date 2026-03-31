@@ -1,95 +1,79 @@
 #!/bin/bash
+# ─────────────────────────────────────────────────────────────
+# render-build.sh
+# Installs language runtimes + npm dependencies on Render.
+# Runs during BUILD phase — not at runtime.
+# ─────────────────────────────────────────────────────────────
 
-set -e
-
-echo ""
-echo "================================================"
-echo "🚀 DebugSphere Portable Build Starting"
-echo "================================================"
-echo ""
-
-# ------------------------------------------------------------
-# Download Stable Java JDK (Fixed URL — NOT latest)
-# ------------------------------------------------------------
-
-echo "☕ Downloading OpenJDK 17..."
-
-mkdir -p .java
-
-curl -L \
-https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.11+9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.11_9.tar.gz \
--o openjdk.tar.gz
-
-echo "📦 Extracting Java..."
-
-tar -xzf openjdk.tar.gz -C .java
-
-echo "🔎 Setting JAVA_HOME..."
-
-JAVA_FOLDER=$(ls .java)
-
-export JAVA_HOME=$PWD/.java/$JAVA_FOLDER
-export PATH=$JAVA_HOME/bin:$PATH
+set -e  # exit on any error
 
 echo ""
-echo "🔎 Checking Java..."
-
-java -version
-
+echo "════════════════════════════════════════════════"
+echo "  DebugSphere — Render Build Script"
+echo "════════════════════════════════════════════════"
 echo ""
-echo "🔎 Checking javac..."
 
-javac -version
+# ── Update package list ────────────────────────────────────
+echo "📦  Updating apt..."
+apt-get update -qq
 
-echo "✅ Java Ready"
+# ── Python 3 ──────────────────────────────────────────────
+echo "🐍  Installing Python 3..."
+apt-get install -y -qq python3
+python3 --version && echo "    ✅ Python OK" || echo "    ❌ Python FAILED"
 
-# ------------------------------------------------------------
-# Check Python (already available on Render)
-# ------------------------------------------------------------
+# ── OpenJDK 17 ────────────────────────────────────────────
+echo "☕  Installing OpenJDK 17..."
+apt-get install -y -qq openjdk-17-jdk-headless
 
-echo ""
-echo "🐍 Checking Python..."
+# Verify java and javac are available
+if command -v javac &> /dev/null; then
+  echo "    ✅ javac OK: $(javac -version 2>&1)"
+else
+  echo "    ❌ javac NOT FOUND — trying full JDK..."
+  apt-get install -y openjdk-17-jdk
+fi
 
-python3 --version || true
+if command -v java &> /dev/null; then
+  echo "    ✅ java OK: $(java -version 2>&1 | head -1)"
+else
+  echo "    ❌ java NOT FOUND"
+fi
 
-# ------------------------------------------------------------
-# Install npm dependencies
-# ------------------------------------------------------------
+# ── Set JAVA_HOME persistently ─────────────────────────────
+JAVA_DIR=$(dirname $(dirname $(readlink -f $(which java) 2>/dev/null || echo "/usr/bin/java")))
+echo "    JAVA_DIR detected: $JAVA_DIR"
 
-echo ""
-echo "📦 Installing npm dependencies..."
+# Write JAVA_HOME to a file that isolatedExecutor can read
+echo "$JAVA_DIR" > /tmp/java_home.txt
+echo "    JAVA_HOME written to /tmp/java_home.txt"
 
-npm install
+# ── G++ compiler ───────────────────────────────────────────
+echo "⚙️   Installing G++..."
+apt-get install -y -qq g++ build-essential
+g++ --version | head -1 && echo "    ✅ G++ OK" || echo "    ❌ G++ FAILED"
 
-echo "✅ npm install complete"
-
-# ------------------------------------------------------------
-# Create execution temp directory
-# ------------------------------------------------------------
-
-echo ""
-echo "📁 Creating temp directory..."
-
+# ── Temp directory ─────────────────────────────────────────
+echo "📁  Creating /tmp/debugsphere..."
 mkdir -p /tmp/debugsphere
 chmod 777 /tmp/debugsphere
+echo "    ✅ Temp dir OK"
 
-echo "✅ Temp directory ready"
-
-# ------------------------------------------------------------
-# Final summary
-# ------------------------------------------------------------
+# ── npm install ────────────────────────────────────────────
+echo "📦  Running npm install..."
+npm install
+echo "    ✅ npm install OK"
 
 echo ""
-echo "================================================"
-echo "✅ Build Summary"
-echo "================================================"
-
-echo "Node:  $(node --version)"
-echo "Java:  $(java -version 2>&1 | head -1)"
-echo "Javac: $(javac -version 2>&1)"
-echo "Python: $(python3 --version 2>&1)"
-
-echo "================================================"
-echo ""
-echo "🎉 DebugSphere Build Completed Successfully"
+echo "════════════════════════════════════════════════"
+echo "  ✅  Build complete"
+echo "════════════════════════════════════════════════"
+echo "  node:    $(node --version)"
+echo "  python3: $(python3 --version 2>&1)"
+echo "  java:    $(java -version 2>&1 | head -1)"
+echo "  javac:   $(javac -version 2>&1)"
+echo "  g++:     $(g++ --version | head -1)"
+echo "  which javac: $(which javac)"
+echo "  which java:  $(which java)"
+echo "════════════════════════════════════════════════"
 echo ""
