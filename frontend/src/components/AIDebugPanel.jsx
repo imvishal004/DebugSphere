@@ -1,22 +1,3 @@
-// ─────────────────────────────────────────────────────────────
-// AIDebugPanel.jsx
-//
-// Displays AI-generated debugging analysis for failed executions.
-//
-// Props:
-//   aiDebug      {object|null} - The aiDebug field from Execution
-//   executionId  {string}      - For the manual re-analyze button
-//   isAnalyzing  {boolean}     - True while manual request is in flight
-//   onAnalyze    {function}    - Called when user clicks "Analyze" button
-//
-// Render states:
-//   1. null aiDebug + no error     → show "Analyze with AI" button
-//   2. isAnalyzing                 → loading spinner
-//   3. aiDebug.triggered + success → show explanation + suggestion
-//   4. aiDebug.triggered + aiError → show error + retry button
-//   5. aiDebug.aiError only        → auto-analysis failed, show retry
-// ─────────────────────────────────────────────────────────────
-
 import { useState } from "react";
 import {
   Sparkles,
@@ -35,38 +16,35 @@ export default function AIDebugPanel({
   isAnalyzing,
   onAnalyze,
 }) {
-  // Collapse/expand the suggestion section independently
-  const [showSuggestion, setShowSuggestion] = useState(true);
+  const [showSuggestion,  setShowSuggestion]  = useState(true);
   const [showExplanation, setShowExplanation] = useState(true);
 
-  // ── State 1: Loading (manual request in flight) ───────────
+  // ── Loading ───────────────────────────────────────────────
   if (isAnalyzing) {
     return (
-      <div className="mt-3 rounded-lg border border-indigo-500/30 bg-indigo-950/40 p-4">
+      <div className="p-4">
         <div className="flex items-center gap-2 text-indigo-300">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-sm font-medium">
-            AI is analyzing your error…
-          </span>
+          <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+          <span className="text-sm font-medium">AI is analyzing your error…</span>
         </div>
-        <p className="mt-1 text-xs text-indigo-400/70">
+        <p className="mt-1 text-xs text-indigo-400/70 pl-6">
           This usually takes 3–8 seconds
         </p>
       </div>
     );
   }
 
-  // ── State 2: Not yet triggered — show CTA button ──────────
+  // ── Not yet triggered ─────────────────────────────────────
   if (!aiDebug || !aiDebug.triggered) {
     return (
-      <div className="mt-3 rounded-lg border border-slate-600/50 bg-slate-800/50 p-4">
+      <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-slate-300 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-indigo-400" />
+              <Sparkles className="w-4 h-4 text-indigo-400 flex-shrink-0" />
               AI Debugging Available
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-500 pl-5">
               Let AI explain the error and suggest a fix
             </p>
           </div>
@@ -82,17 +60,17 @@ export default function AIDebugPanel({
             "
           >
             <Sparkles className="w-3.5 h-3.5" />
-            Analyze with AI
+            Analyze
           </button>
         </div>
       </div>
     );
   }
 
-  // ── State 3: AI call itself failed ────────────────────────
+  // ── AI call failed ────────────────────────────────────────
   if (aiDebug.triggered && aiDebug.aiError && !aiDebug.explanation) {
     return (
-      <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/30 p-4">
+      <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
@@ -101,11 +79,9 @@ export default function AIDebugPanel({
                 AI Analysis Unavailable
               </p>
               <p className="mt-0.5 text-xs text-amber-400/70">
-                {aiDebug.aiError.includes("API_KEY")
-                  ? "AI service is not configured. Contact the administrator."
-                  : aiDebug.aiError.includes("TIMEOUT")
+                {aiDebug.aiError.includes("timeout")
                   ? "AI service timed out. Please try again."
-                  : "AI service encountered an error. Please try again."}
+                  : "AI service encountered an error. Please retry."}
               </p>
             </div>
           </div>
@@ -126,40 +102,37 @@ export default function AIDebugPanel({
     );
   }
 
-  // ── State 4: Successful AI analysis ──────────────────────
+  // ── Successful analysis ───────────────────────────────────
   return (
-    <div className="mt-3 rounded-lg border border-indigo-500/30 bg-indigo-950/30 overflow-hidden">
+    <div className="flex flex-col">
 
       {/* Panel header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-900/30 border-b border-indigo-500/20">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-900/20 border-b border-indigo-500/20 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-indigo-400" />
+          <Sparkles className="w-4 h-4 text-indigo-400 flex-shrink-0" />
           <span className="text-sm font-semibold text-indigo-300">
             AI Debug Analysis
           </span>
           {aiDebug.model && (
-            <span className="text-[10px] text-indigo-500 bg-indigo-900/50 px-1.5 py-0.5 rounded-full">
-              {aiDebug.model}
+            <span className="text-[10px] text-indigo-500 bg-indigo-900/50 px-1.5 py-0.5 rounded-full truncate max-w-[100px]">
+              {aiDebug.model.split("/").pop()}
             </span>
           )}
         </div>
-        {/* Re-analyze button */}
         <button
           onClick={onAnalyze}
           title="Re-analyze with AI"
-          className="
-            flex items-center gap-1 text-[11px] text-indigo-400
-            hover:text-indigo-300 transition-colors duration-150
-          "
+          className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors flex-shrink-0"
         >
           <RefreshCw className="w-3 h-3" />
           Re-analyze
         </button>
       </div>
 
-      <div className="p-4 space-y-3">
+      {/* Scrollable content */}
+      <div className="p-4 space-y-3 overflow-auto">
 
-        {/* Explanation section */}
+        {/* What went wrong */}
         {aiDebug.explanation && (
           <div>
             <button
@@ -183,12 +156,12 @@ export default function AIDebugPanel({
           </div>
         )}
 
-        {/* Divider between sections */}
+        {/* Divider */}
         {aiDebug.explanation && aiDebug.suggestion && (
           <div className="border-t border-indigo-500/10" />
         )}
 
-        {/* Suggestion section */}
+        {/* Suggested fix */}
         {aiDebug.suggestion && (
           <div>
             <button
@@ -210,7 +183,7 @@ export default function AIDebugPanel({
           </div>
         )}
 
-        {/* Footer metadata */}
+        {/* Footer */}
         {aiDebug.analyzedAt && (
           <div className="pt-1 flex items-center justify-between text-[10px] text-indigo-500/60">
             <span>
@@ -226,19 +199,14 @@ export default function AIDebugPanel({
   );
 }
 
-// ── Sub-component: renders suggestion with code block support ──
-// Detects fenced code blocks (```...```) in the suggestion text
-// and renders them in a monospace block with distinct styling.
-// Plain text paragraphs are rendered normally.
+// ── Suggestion renderer — handles code blocks ──────────────
 function SuggestionContent({ text }) {
-  // Split on code fences — captures the code block content
   const parts = text.split(/(```[\s\S]*?```)/g);
 
   return (
     <div className="pl-5 space-y-2">
       {parts.map((part, i) => {
         if (part.startsWith("```") && part.endsWith("```")) {
-          // Strip the opening fence line (```python, ```js, etc.)
           const inner = part
             .replace(/^```[^\n]*\n?/, "")
             .replace(/```$/, "")
@@ -248,9 +216,10 @@ function SuggestionContent({ text }) {
             <pre
               key={i}
               className="
-                bg-slate-900/80 border border-slate-700/50
+                bg-slate-950 border border-slate-700/50
                 rounded-md p-3 text-xs font-mono
                 text-green-300 overflow-x-auto whitespace-pre-wrap
+                break-words
               "
             >
               {inner}
@@ -258,7 +227,6 @@ function SuggestionContent({ text }) {
           );
         }
 
-        // Plain text — preserve line breaks
         return part.trim() ? (
           <p key={i} className="text-sm text-slate-300 leading-relaxed">
             {part.trim()}

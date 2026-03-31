@@ -8,17 +8,11 @@ import InputModal from "../components/InputModal";
 import { Play, Save, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
-// ── Boilerplate code per language ──────────────────────────
-// ✅ Fix Issue 2 — JavaScript boilerplate must be valid JS.
-// The previous version had "Node.js 18" as a comment which
-// caused syntax confusion in some execution environments.
-// All boilerplate below is clean and verified valid syntax.
 const BOILERPLATE = {
   python: `# Python 3
 name = input("Enter your name: ")
 print(f"Hello, {name}! Welcome to DebugSphere.")
 `,
-
   java: `// Java 17
 import java.util.Scanner;
 
@@ -31,7 +25,6 @@ public class Main {
     }
 }
 `,
-
   cpp: `// C++ GCC
 #include <iostream>
 #include <string>
@@ -45,8 +38,6 @@ int main() {
     return 0;
 }
 `,
-
-  // ✅ Valid JavaScript — no invalid comment lines
   javascript: `const readline = require('readline');
 const rl = readline.createInterface({ input: process.stdin });
 
@@ -57,51 +48,34 @@ rl.question('Enter your name: ', (name) => {
 `,
 };
 
-// ── Input detector ─────────────────────────────────────────
-// Scans code for stdin read calls per language BEFORE execution.
-// Returns count of detected input calls (0 = no input needed).
-// Strips comments first to avoid false positives.
 function detectInputCalls(code, language) {
   if (!code?.trim()) return 0;
-
   let stripped = code;
 
   if (language === "python") {
     stripped = code.replace(/#.*/g, "");
-    const matches = stripped.match(/\binput\s*\(/g);
-    return matches ? matches.length : 0;
+    const m = stripped.match(/\binput\s*\(/g);
+    return m ? m.length : 0;
   }
-
   if (language === "java") {
-    stripped = code
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/\/\/.*/g, "");
-    const scannerMatches = stripped.match(
-      /\bsc(?:anner)?\s*\.\s*next\w*\s*\(/gi
-    ) || [];
-    const readerMatches = stripped.match(/\.readLine\s*\(/g) || [];
-    return scannerMatches.length + readerMatches.length;
+    stripped = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
+    const s = stripped.match(/\bsc(?:anner)?\s*\.\s*next\w*\s*\(/gi) || [];
+    const r = stripped.match(/\.readLine\s*\(/g) || [];
+    return s.length + r.length;
   }
-
   if (language === "cpp") {
-    stripped = code
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/\/\/.*/g, "");
-    const cinMatches     = stripped.match(/\bcin\s*>>/g)    || [];
-    const getlineMatches = stripped.match(/\bgetline\s*\(/g) || [];
-    return cinMatches.length + getlineMatches.length;
+    stripped = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
+    const c = stripped.match(/\bcin\s*>>/g) || [];
+    const g = stripped.match(/\bgetline\s*\(/g) || [];
+    return c.length + g.length;
   }
-
   if (language === "javascript") {
-    stripped = code
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/\/\/.*/g, "");
-    const rlMatches    = stripped.match(/\brl\.question\s*\(/g)      || [];
-    const stdinMatches = stripped.match(/process\.stdin/g)            || [];
-    const onMatches    = stripped.match(/\.on\s*\(\s*['"]line['"]/g) || [];
-    return rlMatches.length + stdinMatches.length + onMatches.length;
+    stripped = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
+    const r = stripped.match(/\brl\.question\s*\(/g) || [];
+    const s = stripped.match(/process\.stdin/g) || [];
+    const o = stripped.match(/\.on\s*\(\s*['"]line['"]/g) || [];
+    return r.length + s.length + o.length;
   }
-
   return 0;
 }
 
@@ -117,16 +91,12 @@ export default function Editor() {
   const [isSaving,    setIsSaving]    = useState(false);
   const [snippetId,   setSnippetId]   = useState(id || null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  // ── Input modal state ──────────────────────────────────
   const [showInputModal, setShowInputModal] = useState(false);
   const [detectedInputs, setDetectedInputs] = useState(0);
 
-  // ── Load existing snippet ──────────────────────────────
   useEffect(() => {
     if (id) {
-      api
-        .get(`/code/snippets/${id}`)
+      api.get(`/code/snippets/${id}`)
         .then((r) => {
           const s = r.data.data;
           setLanguage(s.language);
@@ -138,7 +108,6 @@ export default function Editor() {
     }
   }, [id]);
 
-  // ── Language change ────────────────────────────────────
   const handleLanguageChange = (lang) => {
     setLanguage(lang);
     if (!id && Object.values(BOILERPLATE).includes(code)) {
@@ -146,9 +115,6 @@ export default function Editor() {
     }
   };
 
-  // ── Poll for execution result ──────────────────────────
-  // Polls every 1s up to 60 tries (60s max).
-  // Increased from 30 because AI analysis adds time.
   const pollResult = useCallback(async (executionId) => {
     const MAX = 60;
     for (let i = 0; i < MAX; i++) {
@@ -161,21 +127,16 @@ export default function Editor() {
           setIsRunning(false);
           return;
         }
-      } catch {
-        break;
-      }
+      } catch { break; }
     }
-    setResult({ status: "failed", error: "Polling timed out after 60s" });
+    setResult({ status: "failed", error: "Polling timed out" });
     setIsRunning(false);
   }, []);
 
-  // ── Core execution function ────────────────────────────
-  // Called directly OR from modal after input is collected.
   const runExecution = async (stdinInput) => {
     setIsRunning(true);
     setResult(null);
     setIsAnalyzing(false);
-
     try {
       const res = await api.post("/executions", {
         language,
@@ -184,9 +145,7 @@ export default function Editor() {
         codeSnippetId: snippetId,
       });
       const { executionId, warnings } = res.data.data;
-      if (warnings?.length) {
-        warnings.forEach((w) => toast(w, { icon: "⚠️" }));
-      }
+      if (warnings?.length) warnings.forEach((w) => toast(w, { icon: "⚠️" }));
       pollResult(executionId);
     } catch (err) {
       setIsRunning(false);
@@ -194,43 +153,27 @@ export default function Editor() {
     }
   };
 
-  // ── Run button click ───────────────────────────────────
-  // Detects input calls → shows modal if needed → runs code
   const handleRun = () => {
-    const inputCount = detectInputCalls(code, language);
-
-    if (inputCount > 0 && !input.trim()) {
-      // Code needs input but user hasn't provided any yet
-      setDetectedInputs(inputCount);
+    const count = detectInputCalls(code, language);
+    if (count > 0 && !input.trim()) {
+      setDetectedInputs(count);
       setShowInputModal(true);
     } else {
-      // No input needed OR user already filled stdin textarea
       runExecution(input);
     }
   };
 
-  // ── Modal handlers ─────────────────────────────────────
-  const handleModalConfirm = (stdinString) => {
-    setInput(stdinString);        // save to textarea for reference
+  const handleModalConfirm = (stdin) => {
+    setInput(stdin);
     setShowInputModal(false);
-    runExecution(stdinString);
+    runExecution(stdin);
   };
 
-  const handleModalCancel = () => {
-    setShowInputModal(false);
-    // Do NOT run — user cancelled
-  };
-
-  // ── Save snippet ───────────────────────────────────────
   const handleSave = async () => {
     setIsSaving(true);
     try {
       if (snippetId) {
-        await api.put(`/code/snippets/${snippetId}`, {
-          title,
-          language,
-          code,
-        });
+        await api.put(`/code/snippets/${snippetId}`, { title, language, code });
       } else {
         const res = await api.post("/code/save", { title, language, code });
         setSnippetId(res.data.data._id);
@@ -243,17 +186,13 @@ export default function Editor() {
     }
   };
 
-  // ── Manual AI analysis ─────────────────────────────────
   const handleAIAnalyze = useCallback(async () => {
     if (!result?._id) return;
     setIsAnalyzing(true);
     try {
       const res = await api.post(`/executions/${result._id}/debug`);
       if (res.data.success) {
-        setResult((prev) => ({
-          ...prev,
-          aiDebug: res.data.data.aiDebug,
-        }));
+        setResult((prev) => ({ ...prev, aiDebug: res.data.data.aiDebug }));
         toast.success("AI analysis complete", { icon: "🤖" });
       } else {
         setResult((prev) => ({
@@ -264,35 +203,32 @@ export default function Editor() {
       }
     } catch (err) {
       if (err.response?.status === 429) {
-        toast.error(
-          "AI rate limit reached. Max 5 analyses per 15 minutes.",
-          { duration: 5000 }
-        );
+        toast.error("AI rate limit: max 5 per 15 min", { duration: 5000 });
       } else {
-        toast.error(
-          err.response?.data?.message || "AI analysis request failed"
-        );
+        toast.error(err.response?.data?.message || "AI analysis failed");
       }
     } finally {
       setIsAnalyzing(false);
     }
   }, [result?._id]);
 
+  const inputCount = detectInputCalls(code, language);
+
   return (
     <>
-      {/* ── Input Modal ──────────────────────────────────── */}
       <InputModal
         isOpen={showInputModal}
         language={language}
         detectedInputs={detectedInputs}
         onConfirm={handleModalConfirm}
-        onCancel={handleModalCancel}
+        onCancel={() => setShowInputModal(false)}
       />
 
-      <div className="h-[calc(100vh-64px)] flex flex-col p-4 lg:px-8 gap-4 max-w-7xl mx-auto w-full">
+      {/* ── Full height container ─────────────────────────── */}
+      <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden p-4 lg:px-8 gap-4 max-w-7xl mx-auto w-full">
 
-        {/* ── Toolbar ────────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-3 justify-between">
+        {/* ── Toolbar ──────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-3 justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <input
               type="text"
@@ -301,78 +237,62 @@ export default function Editor() {
               className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 w-48 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
               placeholder="Snippet title"
             />
-            <LanguageSelector
-              value={language}
-              onChange={handleLanguageChange}
-            />
+            <LanguageSelector value={language} onChange={handleLanguageChange} />
           </div>
-
           <div className="flex items-center gap-2">
             <button
               onClick={handleSave}
               disabled={isSaving}
               className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-sm font-medium transition disabled:opacity-50"
             >
-              {isSaving
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Save    className="w-4 h-4" />
-              }
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save
             </button>
-
             <button
               onClick={handleRun}
               disabled={isRunning}
               className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition"
             >
-              {isRunning
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Play    className="w-4 h-4" />
-              }
+              {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
               {isRunning ? "Running…" : "Run"}
             </button>
           </div>
         </div>
 
-        {/* ── Editor + Right Panel ──────────────────────── */}
-        <div className="flex-1 flex gap-4 min-h-0">
+        {/* ── Main layout — editor + right panel ───────────── */}
+        <div className="flex flex-1 gap-4 min-h-0 overflow-hidden">
 
-          {/* Code editor */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <CodeEditor
-              language={language}
-              code={code}
-              onChange={setCode}
-            />
+          {/* ── Code editor (left, fills remaining width) ─── */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <CodeEditor language={language} code={code} onChange={setCode} />
           </div>
 
-          {/* Right panel: stdin + output */}
-          <div className="w-full lg:w-96 flex flex-col gap-4 min-h-0">
+          {/* ── Right panel (fixed width, full height) ───── */}
+          <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col gap-3 min-h-0 overflow-hidden">
 
-            {/* Stdin textarea */}
-            <div>
+            {/* Stdin */}
+            <div className="flex-shrink-0">
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-medium text-slate-400">
-                  Standard Input (stdin)
+                <label className="text-sm font-medium text-slate-400">
+                  Standard Input
                 </label>
-                {detectInputCalls(code, language) > 0 && (
+                {inputCount > 0 && (
                   <span className="text-[10px] bg-indigo-900/50 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full">
-                    {detectInputCalls(code, language)} input
-                    {detectInputCalls(code, language) > 1 ? "s" : ""} detected
+                    {inputCount} input{inputCount > 1 ? "s" : ""} detected
                   </span>
                 )}
               </div>
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                rows={4}
+                rows={3}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm font-mono text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none"
-                placeholder="Enter input here… or click Run and we'll ask you"
+                placeholder="Enter input… or click Run"
               />
             </div>
 
-            {/* Output console */}
-            <div className="flex-1 flex flex-col min-h-0">
+            {/* Output + AI panel — fills remaining height */}
+            <div className="flex-1 min-h-0 overflow-hidden">
               <OutputConsole
                 result={result}
                 isRunning={isRunning}
