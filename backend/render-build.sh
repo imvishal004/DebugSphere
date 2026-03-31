@@ -1,14 +1,5 @@
 #!/bin/bash
 
-# ============================================================
-# DebugSphere Render Build Script
-# Supports:
-# Java (portable install)
-# Python (already available)
-# JavaScript (Node runtime)
-# C++ (optional — handled at runtime)
-# ============================================================
-
 set -e
 
 echo ""
@@ -18,30 +9,34 @@ echo "================================================"
 echo ""
 
 # ------------------------------------------------------------
-# JAVA INSTALL (Portable)
+# Download Stable Java JDK (Fixed URL — NOT latest)
 # ------------------------------------------------------------
 
-echo "☕ Installing Portable Java JDK..."
+echo "☕ Downloading OpenJDK 17..."
 
 mkdir -p .java
 
 curl -L \
-https://github.com/adoptium/temurin17-binaries/releases/latest/download/OpenJDK17U-jdk_x64_linux_hotspot.tar.gz \
+https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.11+9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.11_9.tar.gz \
 -o openjdk.tar.gz
 
 echo "📦 Extracting Java..."
 
 tar -xzf openjdk.tar.gz -C .java
 
+echo "🔎 Setting JAVA_HOME..."
+
 JAVA_FOLDER=$(ls .java)
 
 export JAVA_HOME=$PWD/.java/$JAVA_FOLDER
 export PATH=$JAVA_HOME/bin:$PATH
 
+echo ""
 echo "🔎 Checking Java..."
 
 java -version
 
+echo ""
 echo "🔎 Checking javac..."
 
 javac -version
@@ -49,16 +44,16 @@ javac -version
 echo "✅ Java Ready"
 
 # ------------------------------------------------------------
-# PYTHON CHECK (Already installed on Render)
+# Check Python (already available on Render)
 # ------------------------------------------------------------
 
 echo ""
 echo "🐍 Checking Python..."
 
-python3 --version || echo "⚠️ Python not detected"
+python3 --version || true
 
 # ------------------------------------------------------------
-# NODE DEPENDENCIES
+# Install npm dependencies
 # ------------------------------------------------------------
 
 echo ""
@@ -69,7 +64,7 @@ npm install
 echo "✅ npm install complete"
 
 # ------------------------------------------------------------
-# TEMP EXECUTION DIRECTORY
+# Create execution temp directory
 # ------------------------------------------------------------
 
 echo ""
@@ -81,7 +76,7 @@ chmod 777 /tmp/debugsphere
 echo "✅ Temp directory ready"
 
 # ------------------------------------------------------------
-# FINAL SUMMARY
+# Final summary
 # ------------------------------------------------------------
 
 echo ""
@@ -90,9 +85,9 @@ echo "✅ Build Summary"
 echo "================================================"
 
 echo "Node:  $(node --version)"
-echo "Python: $(python3 --version 2>&1)"
 echo "Java:  $(java -version 2>&1 | head -1)"
 echo "Javac: $(javac -version 2>&1)"
+echo "Python: $(python3 --version 2>&1)"
 
 echo "================================================"
 echo ""
