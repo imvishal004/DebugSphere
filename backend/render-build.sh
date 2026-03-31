@@ -1,100 +1,65 @@
 #!/bin/bash
 
-# ─────────────────────────────────────────────
+# ============================================================
 # DebugSphere Render Build Script
-# Installs required runtimes:
-# Java (JDK)
-# Python
-# C++
-# Node dependencies
-# ─────────────────────────────────────────────
+# Supports:
+# Java (portable install)
+# Python (already available)
+# JavaScript (Node runtime)
+# C++ (optional — handled at runtime)
+# ============================================================
 
 set -e
 
 echo ""
-echo "════════════════════════════════════════"
-echo "🚀 DebugSphere Build Script Starting"
-echo "════════════════════════════════════════"
+echo "================================================"
+echo "🚀 DebugSphere Portable Build Starting"
+echo "================================================"
 echo ""
 
-# ─────────────────────────────────────────────
-# Update system packages
-# ─────────────────────────────────────────────
+# ------------------------------------------------------------
+# JAVA INSTALL (Portable)
+# ------------------------------------------------------------
 
-echo "📦 Updating package list..."
-apt-get update
+echo "☕ Installing Portable Java JDK..."
 
-# ─────────────────────────────────────────────
-# Install Java JDK
-# (Using default-jdk — most reliable on Render)
-# ─────────────────────────────────────────────
+mkdir -p .java
 
-echo ""
-echo "☕ Installing Java JDK..."
+curl -L \
+https://github.com/adoptium/temurin17-binaries/releases/latest/download/OpenJDK17U-jdk_x64_linux_hotspot.tar.gz \
+-o openjdk.tar.gz
 
-apt-get install -y default-jdk
+echo "📦 Extracting Java..."
 
-echo ""
-echo "🔎 Verifying Java installation..."
+tar -xzf openjdk.tar.gz -C .java
+
+JAVA_FOLDER=$(ls .java)
+
+export JAVA_HOME=$PWD/.java/$JAVA_FOLDER
+export PATH=$JAVA_HOME/bin:$PATH
+
+echo "🔎 Checking Java..."
 
 java -version
 
-echo ""
-echo "🔎 Verifying javac compiler..."
+echo "🔎 Checking javac..."
 
 javac -version
 
-echo "✅ Java installation complete"
+echo "✅ Java Ready"
 
-# ─────────────────────────────────────────────
-# Install Python
-# ─────────────────────────────────────────────
-
-echo ""
-echo "🐍 Installing Python..."
-
-apt-get install -y python3
-
-python3 --version
-
-echo "✅ Python ready"
-
-# ─────────────────────────────────────────────
-# Install C++ compiler
-# ─────────────────────────────────────────────
+# ------------------------------------------------------------
+# PYTHON CHECK (Already installed on Render)
+# ------------------------------------------------------------
 
 echo ""
-echo "⚙️ Installing C++ compiler..."
+echo "🐍 Checking Python..."
 
-apt-get install -y g++ build-essential
+python3 --version || echo "⚠️ Python not detected"
 
-g++ --version | head -1
-
-echo "✅ G++ ready"
-
-# ─────────────────────────────────────────────
-# Show Node version
-# ─────────────────────────────────────────────
-
-echo ""
-echo "🟢 Node.js version: $(node --version)"
-echo "📦 npm version: $(npm --version)"
-
-# ─────────────────────────────────────────────
-# Create temp execution folder
-# ─────────────────────────────────────────────
-
-echo ""
-echo "📁 Creating execution temp directory..."
-
-mkdir -p /tmp/debugsphere
-chmod 777 /tmp/debugsphere
-
-echo "✅ Temp directory ready"
-
-# ─────────────────────────────────────────────
-# Install npm dependencies
-# ─────────────────────────────────────────────
+# ------------------------------------------------------------
+# NODE DEPENDENCIES
+# ------------------------------------------------------------
 
 echo ""
 echo "📦 Installing npm dependencies..."
@@ -103,22 +68,33 @@ npm install
 
 echo "✅ npm install complete"
 
-# ─────────────────────────────────────────────
-# Final runtime verification
-# ─────────────────────────────────────────────
+# ------------------------------------------------------------
+# TEMP EXECUTION DIRECTORY
+# ------------------------------------------------------------
 
 echo ""
-echo "════════════════════════════════════════"
-echo "✅ Build Finished — Runtime Summary"
-echo "════════════════════════════════════════"
+echo "📁 Creating temp directory..."
 
-echo "Node:    $(node --version)"
-echo "Python:  $(python3 --version 2>&1)"
-echo "Java:    $(java -version 2>&1 | head -1)"
-echo "Javac:   $(javac -version 2>&1)"
-echo "G++:     $(g++ --version | head -1)"
+mkdir -p /tmp/debugsphere
+chmod 777 /tmp/debugsphere
 
-echo "════════════════════════════════════════"
+echo "✅ Temp directory ready"
+
+# ------------------------------------------------------------
+# FINAL SUMMARY
+# ------------------------------------------------------------
+
 echo ""
-echo "🎉 DebugSphere Build Successful"
+echo "================================================"
+echo "✅ Build Summary"
+echo "================================================"
+
+echo "Node:  $(node --version)"
+echo "Python: $(python3 --version 2>&1)"
+echo "Java:  $(java -version 2>&1 | head -1)"
+echo "Javac: $(javac -version 2>&1)"
+
+echo "================================================"
+echo ""
+echo "🎉 DebugSphere Build Completed Successfully"
 echo ""
