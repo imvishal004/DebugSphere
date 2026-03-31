@@ -1,15 +1,14 @@
-# render.yaml
-# Place in PROJECT ROOT — same level as backend/ and frontend/
+# render.yaml — project root
 
 services:
 
-  # ── Backend API ───────────────────────────────────────────
+  # ── Backend API ─────────────────────────────────────────
   - type: web
     name: debugsphere-api
     runtime: node
     rootDir: backend
-    buildCommand: chmod +x render-build.sh && bash render-build.sh
-    startCommand: node server.js
+    buildCommand: npm install
+    startCommand: node start.js server
     plan: free
     healthCheckPath: /api/health
 
@@ -17,7 +16,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 5000
+        value: 10000
       - key: FRONTEND_URL
         sync: false
       - key: MONGODB_URI
@@ -49,15 +48,13 @@ services:
       - key: AI_ENABLED
         value: true
 
-  # ── Worker Service ────────────────────────────────────────
-  # MUST be a separate service — not part of the API server
-  # This is why the website was buffering — worker was missing
+  # ── Worker Service ───────────────────────────────────────
   - type: worker
     name: debugsphere-worker
     runtime: node
     rootDir: backend
-    buildCommand: chmod +x render-build.sh && bash render-build.sh
-    startCommand: node worker.js
+    buildCommand: npm install
+    startCommand: node start.js worker
     plan: free
 
     envVars:
