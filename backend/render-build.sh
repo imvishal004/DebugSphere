@@ -1,62 +1,124 @@
 #!/bin/bash
-# ─────────────────────────────────────────────────────────────
-# render-build.sh
-# Installs all language runtimes + npm dependencies
-# Runs on BOTH api and worker services during build phase
-# ─────────────────────────────────────────────────────────────
 
-set -e  # exit immediately on error
+# ─────────────────────────────────────────────
+# DebugSphere Render Build Script
+# Installs required runtimes:
+# Java (JDK)
+# Python
+# C++
+# Node dependencies
+# ─────────────────────────────────────────────
+
+set -e
 
 echo ""
-echo "════════════════════════════════════════════════"
-echo "  DebugSphere — Render Build Script"
-echo "════════════════════════════════════════════════"
+echo "════════════════════════════════════════"
+echo "🚀 DebugSphere Build Script Starting"
+echo "════════════════════════════════════════"
 echo ""
 
-# ── System packages ────────────────────────────────────────
-echo "📦  Updating apt package list..."
-apt-get update -qq 2>/dev/null || true
+# ─────────────────────────────────────────────
+# Update system packages
+# ─────────────────────────────────────────────
 
-# ── Python 3 ──────────────────────────────────────────────
-echo "🐍  Installing Python 3..."
-apt-get install -y -qq python3 2>/dev/null || true
-python3 --version && echo "    ✅ Python ready" || echo "    ❌ Python failed"
+echo "📦 Updating package list..."
+apt-get update
 
-# ── Java 17 JDK ───────────────────────────────────────────
-# This fixes Issue 1 — JDK not installed on Render
-echo "☕  Installing OpenJDK 17..."
-apt-get install -y -qq openjdk-17-jdk 2>/dev/null || true
-java -version 2>&1 | head -1 && echo "    ✅ Java ready" || echo "    ❌ Java failed"
-javac -version 2>&1 && echo "    ✅ javac ready" || echo "    ❌ javac failed"
+# ─────────────────────────────────────────────
+# Install Java JDK
+# (Using default-jdk — most reliable on Render)
+# ─────────────────────────────────────────────
 
-# ── G++ compiler ───────────────────────────────────────────
-echo "⚙️   Installing G++ compiler..."
-apt-get install -y -qq g++ build-essential 2>/dev/null || true
-g++ --version | head -1 && echo "    ✅ G++ ready" || echo "    ❌ G++ failed"
+echo ""
+echo "☕ Installing Java JDK..."
 
-# ── Node.js (pre-installed by Render) ─────────────────────
-echo "🟢  Node.js: $(node --version)"
-echo "    npm:     $(npm --version)"
+apt-get install -y default-jdk
 
-# ── Create temp execution directory ───────────────────────
-echo "📁  Creating temp directory /tmp/debugsphere..."
+echo ""
+echo "🔎 Verifying Java installation..."
+
+java -version
+
+echo ""
+echo "🔎 Verifying javac compiler..."
+
+javac -version
+
+echo "✅ Java installation complete"
+
+# ─────────────────────────────────────────────
+# Install Python
+# ─────────────────────────────────────────────
+
+echo ""
+echo "🐍 Installing Python..."
+
+apt-get install -y python3
+
+python3 --version
+
+echo "✅ Python ready"
+
+# ─────────────────────────────────────────────
+# Install C++ compiler
+# ─────────────────────────────────────────────
+
+echo ""
+echo "⚙️ Installing C++ compiler..."
+
+apt-get install -y g++ build-essential
+
+g++ --version | head -1
+
+echo "✅ G++ ready"
+
+# ─────────────────────────────────────────────
+# Show Node version
+# ─────────────────────────────────────────────
+
+echo ""
+echo "🟢 Node.js version: $(node --version)"
+echo "📦 npm version: $(npm --version)"
+
+# ─────────────────────────────────────────────
+# Create temp execution folder
+# ─────────────────────────────────────────────
+
+echo ""
+echo "📁 Creating execution temp directory..."
+
 mkdir -p /tmp/debugsphere
 chmod 777 /tmp/debugsphere
-echo "    ✅ Temp directory ready"
 
-# ── Install npm dependencies ───────────────────────────────
-echo "📦  Running npm install..."
-npm install
-echo "    ✅ npm install complete"
+echo "✅ Temp directory ready"
+
+# ─────────────────────────────────────────────
+# Install npm dependencies
+# ─────────────────────────────────────────────
 
 echo ""
-echo "════════════════════════════════════════════════"
-echo "  ✅  Build complete — Runtime verification:"
-echo "════════════════════════════════════════════════"
-echo "  node:    $(node --version)"
-echo "  python3: $(python3 --version 2>&1)"
-echo "  java:    $(java -version 2>&1 | head -1)"
-echo "  javac:   $(javac -version 2>&1)"
-echo "  g++:     $(g++ --version | head -1)"
-echo "════════════════════════════════════════════════"
+echo "📦 Installing npm dependencies..."
+
+npm install
+
+echo "✅ npm install complete"
+
+# ─────────────────────────────────────────────
+# Final runtime verification
+# ─────────────────────────────────────────────
+
+echo ""
+echo "════════════════════════════════════════"
+echo "✅ Build Finished — Runtime Summary"
+echo "════════════════════════════════════════"
+
+echo "Node:    $(node --version)"
+echo "Python:  $(python3 --version 2>&1)"
+echo "Java:    $(java -version 2>&1 | head -1)"
+echo "Javac:   $(javac -version 2>&1)"
+echo "G++:     $(g++ --version | head -1)"
+
+echo "════════════════════════════════════════"
+echo ""
+echo "🎉 DebugSphere Build Successful"
 echo ""
