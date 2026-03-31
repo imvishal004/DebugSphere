@@ -2,7 +2,7 @@ FROM node:18-bullseye
 
 WORKDIR /app
 
-# Install all required runtimes
+# Install required runtimes
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
