@@ -51,7 +51,6 @@ rl.question('Enter your name: ', (name) => {
 function detectInputCalls(code, language) {
   if (!code?.trim()) return 0;
   let stripped = code;
-
   if (language === "python") {
     stripped = code.replace(/#.*/g, "");
     const m = stripped.match(/\binput\s*\(/g);
@@ -82,15 +81,15 @@ function detectInputCalls(code, language) {
 export default function Editor() {
   const { id } = useParams();
 
-  const [language,    setLanguage]    = useState("python");
-  const [code,        setCode]        = useState(BOILERPLATE.python);
-  const [input,       setInput]       = useState("");
-  const [title,       setTitle]       = useState("Untitled");
-  const [result,      setResult]      = useState(null);
-  const [isRunning,   setIsRunning]   = useState(false);
-  const [isSaving,    setIsSaving]    = useState(false);
-  const [snippetId,   setSnippetId]   = useState(id || null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [language,       setLanguage]       = useState("python");
+  const [code,           setCode]           = useState(BOILERPLATE.python);
+  const [input,          setInput]          = useState("");
+  const [title,          setTitle]          = useState("Untitled");
+  const [result,         setResult]         = useState(null);
+  const [isRunning,      setIsRunning]      = useState(false);
+  const [isSaving,       setIsSaving]       = useState(false);
+  const [snippetId,      setSnippetId]      = useState(id || null);
+  const [isAnalyzing,    setIsAnalyzing]    = useState(false);
   const [showInputModal, setShowInputModal] = useState(false);
   const [detectedInputs, setDetectedInputs] = useState(0);
 
@@ -163,12 +162,6 @@ export default function Editor() {
     }
   };
 
-  const handleModalConfirm = (stdin) => {
-    setInput(stdin);
-    setShowInputModal(false);
-    runExecution(stdin);
-  };
-
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -220,14 +213,25 @@ export default function Editor() {
         isOpen={showInputModal}
         language={language}
         detectedInputs={detectedInputs}
-        onConfirm={handleModalConfirm}
+        onConfirm={(stdin) => {
+          setInput(stdin);
+          setShowInputModal(false);
+          runExecution(stdin);
+        }}
         onCancel={() => setShowInputModal(false)}
       />
 
-      {/* ── Full height container ─────────────────────────── */}
-      <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden p-4 lg:px-8 gap-4 max-w-7xl mx-auto w-full">
+      {/* Page container — full height minus navbar */}
+      <div className="
+        flex flex-col
+        h-[calc(100vh-64px)]
+        overflow-hidden
+        p-4 lg:px-8
+        gap-4
+        max-w-7xl mx-auto w-full
+      ">
 
-        {/* ── Toolbar ──────────────────────────────────────── */}
+        {/* Toolbar — fixed height, never shrinks */}
         <div className="flex flex-wrap items-center gap-3 justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <input
@@ -245,7 +249,9 @@ export default function Editor() {
               disabled={isSaving}
               className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-sm font-medium transition disabled:opacity-50"
             >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {isSaving
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Save    className="w-4 h-4" />}
               Save
             </button>
             <button
@@ -253,22 +259,37 @@ export default function Editor() {
               disabled={isRunning}
               className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition"
             >
-              {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              {isRunning
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Play    className="w-4 h-4" />}
               {isRunning ? "Running…" : "Run"}
             </button>
           </div>
         </div>
 
-        {/* ── Main layout — editor + right panel ───────────── */}
-        <div className="flex flex-1 gap-4 min-h-0 overflow-hidden">
+        {/*
+          Main row — flex-1 takes all remaining vertical space
+          min-h-0 is CRITICAL: without it flex children
+          cannot shrink below their content size and Monaco
+          gets 0px height
+        */}
+        <div className="flex flex-1 gap-4 min-h-0">
 
-          {/* ── Code editor (left, fills remaining width) ─── */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <CodeEditor language={language} code={code} onChange={setCode} />
+          {/*
+            Editor column — flex-1 for width, min-h-0 for height
+            h-full passes the computed pixel height into CodeEditor
+            ↑ THIS IS THE KEY FIX
+          */}
+          <div className="flex-1 min-h-0 h-full">
+            <CodeEditor
+              language={language}
+              code={code}
+              onChange={setCode}
+            />
           </div>
 
-          {/* ── Right panel (fixed width, full height) ───── */}
-          <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col gap-3 min-h-0 overflow-hidden">
+          {/* Right panel — fixed width, full height, scrollable */}
+          <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col gap-3 min-h-0">
 
             {/* Stdin */}
             <div className="flex-shrink-0">
@@ -291,8 +312,8 @@ export default function Editor() {
               />
             </div>
 
-            {/* Output + AI panel — fills remaining height */}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            {/* Output console — fills remaining height */}
+            <div className="flex-1 min-h-0">
               <OutputConsole
                 result={result}
                 isRunning={isRunning}
