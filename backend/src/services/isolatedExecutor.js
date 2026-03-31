@@ -11,12 +11,7 @@
 //   ✅ Temp directory per execution (cleaned up after)
 //   ✅ Same return shape as dockerManager.js
 //      { stdout, stderr, executionTime, exitCode, timedOut }
-//
-// Supported languages:
-//   python     → python3
-//   javascript → node
-//   java       → javac + java
-//   cpp        → g++  + ./solution
+//   ✅ Java path resolution for Render (openjdk-17)
 //
 // Drop-in replacement:
 //   worker.js only needs its import line changed.
@@ -29,9 +24,43 @@ const path      = require("path");
 const os        = require("os");
 const { v4: uuidv4 } = require("uuid");
 
+// ── Java binary paths ──────────────────────────────────────
+// Render installs OpenJDK 17 at a known path.
+// We check multiple locations so it works both locally
+// and on Render without any manual configuration.
+function findJavaBinary(binaryName) {
+  const candidates = [
+    // Render / Ubuntu 22.04 OpenJDK 17 path
+    `/usr/lib/jvm/java-17-openjdk-amd64/bin/${binaryName}`,
+    // Ubuntu generic path
+    `/usr/lib/jvm/java-17-openjdk/bin/${binaryName}`,
+    // Fallback — rely on PATH
+    binaryName,
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      // Check if file exists and is executable
+      if (
+        candidate === binaryName ||
+        require("fs").existsSync(candidate)
+      ) {
+        return candidate;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return binaryName; // last resort — use PATH
+}
+
+const JAVAC = findJavaBinary("javac");
+const JAVA  = findJavaBinary("java");
+
+console.log(`☕  Java binaries: javac=${JAVAC} | java=${JAVA}`);
+
 // ── Language configurations ────────────────────────────────
-// buildCmd: null = interpreted language, no compile step
-// runCmd:   function(dir) → [executable, [args]]
 const LANG_CONFIG = {
   python: {
     fileName: "solution.py",
@@ -47,17 +76,19 @@ const LANG_CONFIG = {
 
   java: {
     fileName: "Main.java",
-    // javac compiles, then java runs the class
-    buildCmd: (dir) => ["javac", [path.join(dir, "Main.java")]],
-    runCmd:   (dir) => ["java",  ["-cp", dir, "Main"]],
+    buildCmd: (dir) => [JAVAC, [path.join(dir, "Main.java")]],
+    runCmd:   (dir) => [JAVA,  ["-cp", dir, "Main"]],
   },
 
   cpp: {
     fileName: "solution.cpp",
-    // g++ compiles to binary, then binary runs
     buildCmd: (dir) => [
       "g++",
-      ["-O2", "-o", path.join(dir, "solution"), path.join(dir, "solution.cpp")],
+      [
+        "-O2",
+        "-o", path.join(dir, "solution"),
+        path.join(dir, "solution.cpp"),
+      ],
     ],
     runCmd: (dir) => [path.join(dir, "solution"), []],
   },
@@ -66,9 +97,6 @@ const LANG_CONFIG = {
 // ── Process runner ─────────────────────────────────────────
 // Spawns a child process, pipes stdin, collects stdout/stderr.
 // Kills the process if it exceeds timeoutMs.
-//
-// Returns:
-//   { stdout, stderr, exitCode, timedOut }
 function runProcess(executable, args, stdinData, timeoutMs, cwd) {
   return new Promise((resolve) => {
     let stdout  = "";
@@ -79,24 +107,28 @@ function runProcess(executable, args, stdinData, timeoutMs, cwd) {
     const proc = spawn(executable, args, {
       cwd:   cwd || os.tmpdir(),
       stdio: ["pipe", "pipe", "pipe"],
-      // Prevent child from inheriting parent environment vars
-      // that could expose secrets (NVIDIA_API_KEY etc.)
+
+      // Sanitized environment — do not expose server secrets
+      // to user code processes
       env: {
-        PATH:   process.env.PATH,
-        HOME:   os.tmpdir(),
-        TMPDIR: os.tmpdir(),
-        LANG:   "en_US.UTF-8",
+        PATH:     process.env.PATH,
+        HOME:     os.tmpdir(),
+        TMPDIR:   os.tmpdir(),
+        LANG:     "en_US.UTF-8",
+        // Java needs JAVA_HOME to find its libraries
+        JAVA_HOME: process.env.JAVA_HOME ||
+                   "/usr/lib/jvm/java-17-openjdk-amd64",
       },
     });
 
-    // ── Timeout killer ───────────────────────────────────
+    // ── Timeout killer ─────────────────────────────────────
     const timer = setTimeout(() => {
       if (settled) return;
       killed = true;
       proc.kill("SIGKILL");
     }, timeoutMs);
 
-    // ── Pipe stdin then close ────────────────────────────
+    // ── Pipe stdin then close ──────────────────────────────
     // Closing stdin signals EOF to the child process so
     // input() / Scanner / cin / readline stop waiting.
     try {
@@ -108,7 +140,7 @@ function runProcess(executable, args, stdinData, timeoutMs, cwd) {
       // stdin may already be closed — ignore
     }
 
-    // ── Collect output ───────────────────────────────────
+    // ── Collect output ─────────────────────────────────────
     // Cap at 1 MB to prevent memory issues from infinite
     // output loops (e.g. while True: print("x"))
     const MAX_OUTPUT = 1 * 1024 * 1024; // 1 MB
@@ -125,12 +157,11 @@ function runProcess(executable, args, stdinData, timeoutMs, cwd) {
       }
     });
 
-    // ── Process exit ─────────────────────────────────────
+    // ── Process exit ───────────────────────────────────────
     proc.on("close", (code) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-
       resolve({
         stdout:   stdout.trim(),
         stderr:   stderr.trim(),
@@ -139,7 +170,7 @@ function runProcess(executable, args, stdinData, timeoutMs, cwd) {
       });
     });
 
-    // ── Spawn error (executable not found etc.) ──────────
+    // ── Spawn error (executable not found etc.) ────────────
     proc.on("error", (err) => {
       if (settled) return;
       settled = true;
@@ -149,11 +180,11 @@ function runProcess(executable, args, stdinData, timeoutMs, cwd) {
       let message = err.message;
       if (err.code === "ENOENT") {
         const runtimeName = {
-          python3:  "Python 3",
-          node:     "Node.js",
-          javac:    "Java JDK",
-          java:     "Java JDK",
-          "g++":    "G++ compiler",
+          python3: "Python 3",
+          node:    "Node.js",
+          javac:   "Java JDK (javac)",
+          java:    "Java JDK (java)",
+          "g++":   "G++ compiler",
         }[executable] || executable;
 
         message =
@@ -182,7 +213,7 @@ function runProcess(executable, args, stdinData, timeoutMs, cwd) {
 // @returns {Promise<{
 //   stdout:        string,
 //   stderr:        string,
-//   executionTime: number,   // milliseconds
+//   executionTime: number,
 //   exitCode:      number,
 //   timedOut:      boolean
 // }>}
@@ -197,9 +228,7 @@ async function executeInDocker(language, code, input) {
 
   const TIMEOUT = parseInt(process.env.EXECUTION_TIMEOUT, 10) || 10000;
 
-  // ── Create isolated temp directory ──────────────────────
-  // Each execution gets its own UUID-named directory.
-  // Cleaned up in the finally block regardless of outcome.
+  // ── Create isolated temp directory ─────────────────────
   const execId  = uuidv4();
   const baseDir = process.env.HOST_TEMP_DIR
     ? path.resolve(process.env.HOST_TEMP_DIR)
@@ -212,14 +241,14 @@ async function executeInDocker(language, code, input) {
   const startTime = Date.now();
 
   try {
-    // ── Write source file ────────────────────────────────
+    // ── Write source file ───────────────────────────────
     await fs.writeFile(
       path.join(tempDir, config.fileName),
       code,
       { encoding: "utf8", mode: 0o600 }
     );
 
-    // ── Build step (Java, C++ only) ──────────────────────
+    // ── Build step (Java, C++ only) ─────────────────────
     if (config.buildCmd) {
       const [buildExe, buildArgs] = config.buildCmd(tempDir);
 
@@ -230,7 +259,7 @@ async function executeInDocker(language, code, input) {
       const buildResult = await runProcess(
         buildExe,
         buildArgs,
-        null,           // no stdin for compiler
+        null,      // no stdin for compiler
         TIMEOUT,
         tempDir
       );
@@ -238,6 +267,9 @@ async function executeInDocker(language, code, input) {
       // Compilation failed — return compiler error immediately
       if (buildResult.exitCode !== 0) {
         const compileTime = Date.now() - startTime;
+        console.log(
+          `❌  Compilation failed in ${compileTime}ms`
+        );
         return {
           stdout:        "",
           stderr:        buildResult.stderr || buildResult.stdout,
@@ -252,9 +284,14 @@ async function executeInDocker(language, code, input) {
       );
     }
 
-    // ── Run step ─────────────────────────────────────────
+    // ── Run step ────────────────────────────────────────
     const [runExe, runArgs] = config.runCmd(tempDir);
-    const remainingTime     = TIMEOUT - (Date.now() - startTime);
+
+    // Remaining time after compile step
+    const remainingTime = Math.max(
+      TIMEOUT - (Date.now() - startTime),
+      2000   // at least 2s for the run step
+    );
 
     console.log(
       `▶️   Running ${language} | exec: ${execId.slice(0, 8)} | ` +
@@ -265,13 +302,13 @@ async function executeInDocker(language, code, input) {
       runExe,
       runArgs,
       input || "",
-      Math.max(remainingTime, 2000), // at least 2s for run step
+      remainingTime,
       tempDir
     );
 
     const executionTime = Date.now() - startTime;
 
-    // ── Timeout ──────────────────────────────────────────
+    // ── Timeout ─────────────────────────────────────────
     if (runResult.timedOut) {
       return {
         stdout:        "",
@@ -291,9 +328,8 @@ async function executeInDocker(language, code, input) {
     };
 
   } finally {
-    // ── Cleanup temp directory ───────────────────────────
+    // ── Cleanup temp directory ──────────────────────────
     // Always runs — even if execution threw an error.
-    // Silent — cleanup failure should not affect the result.
     await fs.remove(tempDir).catch(() => {});
   }
 }

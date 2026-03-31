@@ -4,15 +4,21 @@ import api from "../services/api";
 import CodeEditor from "../components/CodeEditor";
 import LanguageSelector from "../components/LanguageSelector";
 import OutputConsole from "../components/OutputConsole";
-import InputModal from "../components/InputModal";   // ← NEW
+import InputModal from "../components/InputModal";
 import { Play, Save, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
+// ── Boilerplate code per language ──────────────────────────
+// ✅ Fix Issue 2 — JavaScript boilerplate must be valid JS.
+// The previous version had "Node.js 18" as a comment which
+// caused syntax confusion in some execution environments.
+// All boilerplate below is clean and verified valid syntax.
 const BOILERPLATE = {
-  python: `# Python 3.11
+  python: `# Python 3
 name = input("Enter your name: ")
 print(f"Hello, {name}! Welcome to DebugSphere.")
 `,
+
   java: `// Java 17
 import java.util.Scanner;
 
@@ -25,7 +31,8 @@ public class Main {
     }
 }
 `,
-  cpp: `// C++ (GCC 12)
+
+  cpp: `// C++ GCC
 #include <iostream>
 #include <string>
 using namespace std;
@@ -38,8 +45,9 @@ int main() {
     return 0;
 }
 `,
-  javascript: `// Node.js 18
-const readline = require('readline');
+
+  // ✅ Valid JavaScript — no invalid comment lines
+  javascript: `const readline = require('readline');
 const rl = readline.createInterface({ input: process.stdin });
 
 rl.question('Enter your name: ', (name) => {
@@ -49,61 +57,47 @@ rl.question('Enter your name: ', (name) => {
 `,
 };
 
-// ── Input detector ─────────────────────────────────────────────
-// Scans code for stdin read calls per language.
+// ── Input detector ─────────────────────────────────────────
+// Scans code for stdin read calls per language BEFORE execution.
 // Returns count of detected input calls (0 = no input needed).
-//
-// We scan BEFORE execution so we can prompt the user.
-// Handles comments by stripping them first.
+// Strips comments first to avoid false positives.
 function detectInputCalls(code, language) {
   if (!code?.trim()) return 0;
 
-  // Strip single-line comments to avoid false positives
-  // e.g. # input() in a Python comment should not trigger modal
   let stripped = code;
 
   if (language === "python") {
-    // Remove # comments
     stripped = code.replace(/#.*/g, "");
-    // Count input( occurrences
     const matches = stripped.match(/\binput\s*\(/g);
     return matches ? matches.length : 0;
   }
 
   if (language === "java") {
-    // Remove // comments and /* */ blocks
     stripped = code
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/\/\/.*/g, "");
-    // Count Scanner.next*, BufferedReader.readLine
     const scannerMatches = stripped.match(
       /\bsc(?:anner)?\s*\.\s*next\w*\s*\(/gi
     ) || [];
-    const readerMatches  = stripped.match(
-      /\.readLine\s*\(/g
-    ) || [];
+    const readerMatches = stripped.match(/\.readLine\s*\(/g) || [];
     return scannerMatches.length + readerMatches.length;
   }
 
   if (language === "cpp") {
-    // Remove // and /* */ comments
     stripped = code
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/\/\/.*/g, "");
-    // Count cin >> occurrences and getline calls
-    const cinMatches     = stripped.match(/\bcin\s*>>/g)      || [];
-    const getlineMatches = stripped.match(/\bgetline\s*\(/g)   || [];
+    const cinMatches     = stripped.match(/\bcin\s*>>/g)    || [];
+    const getlineMatches = stripped.match(/\bgetline\s*\(/g) || [];
     return cinMatches.length + getlineMatches.length;
   }
 
   if (language === "javascript") {
-    // Remove // and /* */ comments
     stripped = code
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/\/\/.*/g, "");
-    // Count readline question/on calls and process.stdin
-    const rlMatches    = stripped.match(/\brl\.question\s*\(/g)  || [];
-    const stdinMatches = stripped.match(/process\.stdin/g)        || [];
+    const rlMatches    = stripped.match(/\brl\.question\s*\(/g)      || [];
+    const stdinMatches = stripped.match(/process\.stdin/g)            || [];
     const onMatches    = stripped.match(/\.on\s*\(\s*['"]line['"]/g) || [];
     return rlMatches.length + stdinMatches.length + onMatches.length;
   }
@@ -113,24 +107,26 @@ function detectInputCalls(code, language) {
 
 export default function Editor() {
   const { id } = useParams();
-  const [language,   setLanguage]   = useState("python");
-  const [code,       setCode]       = useState(BOILERPLATE.python);
-  const [input,      setInput]      = useState("");
-  const [title,      setTitle]      = useState("Untitled");
-  const [result,     setResult]     = useState(null);
-  const [isRunning,  setIsRunning]  = useState(false);
-  const [isSaving,   setIsSaving]   = useState(false);
-  const [snippetId,  setSnippetId]  = useState(id || null);
+
+  const [language,    setLanguage]    = useState("python");
+  const [code,        setCode]        = useState(BOILERPLATE.python);
+  const [input,       setInput]       = useState("");
+  const [title,       setTitle]       = useState("Untitled");
+  const [result,      setResult]      = useState(null);
+  const [isRunning,   setIsRunning]   = useState(false);
+  const [isSaving,    setIsSaving]    = useState(false);
+  const [snippetId,   setSnippetId]   = useState(id || null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // ── Input modal state ──────────────────────────────────────
-  const [showInputModal,   setShowInputModal]   = useState(false);
-  const [detectedInputs,   setDetectedInputs]   = useState(0);
+  // ── Input modal state ──────────────────────────────────
+  const [showInputModal, setShowInputModal] = useState(false);
+  const [detectedInputs, setDetectedInputs] = useState(0);
 
-  // Load snippet
+  // ── Load existing snippet ──────────────────────────────
   useEffect(() => {
     if (id) {
-      api.get(`/code/snippets/${id}`)
+      api
+        .get(`/code/snippets/${id}`)
         .then((r) => {
           const s = r.data.data;
           setLanguage(s.language);
@@ -142,6 +138,7 @@ export default function Editor() {
     }
   }, [id]);
 
+  // ── Language change ────────────────────────────────────
   const handleLanguageChange = (lang) => {
     setLanguage(lang);
     if (!id && Object.values(BOILERPLATE).includes(code)) {
@@ -149,9 +146,11 @@ export default function Editor() {
     }
   };
 
-  // Poll for execution result
+  // ── Poll for execution result ──────────────────────────
+  // Polls every 1s up to 60 tries (60s max).
+  // Increased from 30 because AI analysis adds time.
   const pollResult = useCallback(async (executionId) => {
-    const MAX = 60;   // increased from 30 — AI analysis takes time
+    const MAX = 60;
     for (let i = 0; i < MAX; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       try {
@@ -166,13 +165,12 @@ export default function Editor() {
         break;
       }
     }
-    setResult({ status: "failed", error: "Polling timed out" });
+    setResult({ status: "failed", error: "Polling timed out after 60s" });
     setIsRunning(false);
   }, []);
 
-  // ── Core execution function ────────────────────────────────
-  // Called directly when no input needed,
-  // or called from modal confirm with stdin string.
+  // ── Core execution function ────────────────────────────
+  // Called directly OR from modal after input is collected.
   const runExecution = async (stdinInput) => {
     setIsRunning(true);
     setResult(null);
@@ -186,7 +184,9 @@ export default function Editor() {
         codeSnippetId: snippetId,
       });
       const { executionId, warnings } = res.data.data;
-      if (warnings?.length) warnings.forEach((w) => toast(w, { icon: "⚠️" }));
+      if (warnings?.length) {
+        warnings.forEach((w) => toast(w, { icon: "⚠️" }));
+      }
       pollResult(executionId);
     } catch (err) {
       setIsRunning(false);
@@ -194,44 +194,43 @@ export default function Editor() {
     }
   };
 
-  // ── Run button handler ─────────────────────────────────────
-  // 1. Detect input calls in code
-  // 2. If found AND stdin textarea is empty → show modal
-  // 3. If stdin already provided → run directly
-  // 4. If no input calls → run directly
+  // ── Run button click ───────────────────────────────────
+  // Detects input calls → shows modal if needed → runs code
   const handleRun = () => {
     const inputCount = detectInputCalls(code, language);
 
     if (inputCount > 0 && !input.trim()) {
-      // Code needs input but user hasn't provided any
-      // Show modal so user can enter input values
+      // Code needs input but user hasn't provided any yet
       setDetectedInputs(inputCount);
       setShowInputModal(true);
     } else {
-      // Either no input needed OR user already filled stdin textarea
+      // No input needed OR user already filled stdin textarea
       runExecution(input);
     }
   };
 
-  // ── Modal confirm ──────────────────────────────────────────
+  // ── Modal handlers ─────────────────────────────────────
   const handleModalConfirm = (stdinString) => {
-    setInput(stdinString);       // save to stdin textarea for reference
+    setInput(stdinString);        // save to textarea for reference
     setShowInputModal(false);
     runExecution(stdinString);
   };
 
-  // ── Modal cancel ───────────────────────────────────────────
   const handleModalCancel = () => {
     setShowInputModal(false);
     // Do NOT run — user cancelled
   };
 
-  // Save
+  // ── Save snippet ───────────────────────────────────────
   const handleSave = async () => {
     setIsSaving(true);
     try {
       if (snippetId) {
-        await api.put(`/code/snippets/${snippetId}`, { title, language, code });
+        await api.put(`/code/snippets/${snippetId}`, {
+          title,
+          language,
+          code,
+        });
       } else {
         const res = await api.post("/code/save", { title, language, code });
         setSnippetId(res.data.data._id);
@@ -244,14 +243,17 @@ export default function Editor() {
     }
   };
 
-  // AI analyze
+  // ── Manual AI analysis ─────────────────────────────────
   const handleAIAnalyze = useCallback(async () => {
     if (!result?._id) return;
     setIsAnalyzing(true);
     try {
       const res = await api.post(`/executions/${result._id}/debug`);
       if (res.data.success) {
-        setResult((prev) => ({ ...prev, aiDebug: res.data.data.aiDebug }));
+        setResult((prev) => ({
+          ...prev,
+          aiDebug: res.data.data.aiDebug,
+        }));
         toast.success("AI analysis complete", { icon: "🤖" });
       } else {
         setResult((prev) => ({
@@ -262,11 +264,14 @@ export default function Editor() {
       }
     } catch (err) {
       if (err.response?.status === 429) {
-        toast.error("AI rate limit reached. Max 5 analyses per 15 minutes.", {
-          duration: 5000,
-        });
+        toast.error(
+          "AI rate limit reached. Max 5 analyses per 15 minutes.",
+          { duration: 5000 }
+        );
       } else {
-        toast.error(err.response?.data?.message || "AI analysis request failed");
+        toast.error(
+          err.response?.data?.message || "AI analysis request failed"
+        );
       }
     } finally {
       setIsAnalyzing(false);
@@ -275,7 +280,7 @@ export default function Editor() {
 
   return (
     <>
-      {/* ── Input Modal ────────────────────────────────────── */}
+      {/* ── Input Modal ──────────────────────────────────── */}
       <InputModal
         isOpen={showInputModal}
         language={language}
@@ -286,7 +291,7 @@ export default function Editor() {
 
       <div className="h-[calc(100vh-64px)] flex flex-col p-4 lg:px-8 gap-4 max-w-7xl mx-auto w-full">
 
-        {/* Toolbar */}
+        {/* ── Toolbar ────────────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <div className="flex items-center gap-3">
             <input
@@ -296,7 +301,10 @@ export default function Editor() {
               className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 w-48 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
               placeholder="Snippet title"
             />
-            <LanguageSelector value={language} onChange={handleLanguageChange} />
+            <LanguageSelector
+              value={language}
+              onChange={handleLanguageChange}
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -311,6 +319,7 @@ export default function Editor() {
               }
               Save
             </button>
+
             <button
               onClick={handleRun}
               disabled={isRunning}
@@ -325,15 +334,19 @@ export default function Editor() {
           </div>
         </div>
 
-        {/* Editor + Sidebar */}
+        {/* ── Editor + Right Panel ──────────────────────── */}
         <div className="flex-1 flex gap-4 min-h-0">
 
           {/* Code editor */}
           <div className="flex-1 flex flex-col min-h-0">
-            <CodeEditor language={language} code={code} onChange={setCode} />
+            <CodeEditor
+              language={language}
+              code={code}
+              onChange={setCode}
+            />
           </div>
 
-          {/* Right panel */}
+          {/* Right panel: stdin + output */}
           <div className="w-full lg:w-96 flex flex-col gap-4 min-h-0">
 
             {/* Stdin textarea */}
@@ -342,7 +355,6 @@ export default function Editor() {
                 <label className="block text-sm font-medium text-slate-400">
                   Standard Input (stdin)
                 </label>
-                {/* Show badge if inputs detected */}
                 {detectInputCalls(code, language) > 0 && (
                   <span className="text-[10px] bg-indigo-900/50 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full">
                     {detectInputCalls(code, language)} input
@@ -359,7 +371,7 @@ export default function Editor() {
               />
             </div>
 
-            {/* Output */}
+            {/* Output console */}
             <div className="flex-1 flex flex-col min-h-0">
               <OutputConsole
                 result={result}
@@ -368,6 +380,7 @@ export default function Editor() {
                 onAnalyze={handleAIAnalyze}
               />
             </div>
+
           </div>
         </div>
       </div>

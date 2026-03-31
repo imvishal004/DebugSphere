@@ -1,0 +1,91 @@
+# render.yaml
+# Place in PROJECT ROOT — same level as backend/ and frontend/
+
+services:
+
+  # ── Backend API ───────────────────────────────────────────
+  - type: web
+    name: debugsphere-api
+    runtime: node
+    rootDir: backend
+    buildCommand: chmod +x render-build.sh && bash render-build.sh
+    startCommand: node server.js
+    plan: free
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: FRONTEND_URL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: EXECUTION_TIMEOUT
+        value: 10000
+      - key: HOST_TEMP_DIR
+        value: /tmp/debugsphere
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: openai/gpt-oss-120b
+      - key: AI_TEMPERATURE
+        value: 1
+      - key: AI_TOP_P
+        value: 1
+      - key: AI_MAX_TOKENS
+        value: 4096
+      - key: AI_FIRST_CHUNK_TIMEOUT
+        value: 60000
+      - key: AI_IDLE_TIMEOUT
+        value: 30000
+      - key: AI_ENABLED
+        value: true
+
+  # ── Worker Service ────────────────────────────────────────
+  # MUST be a separate service — not part of the API server
+  # This is why the website was buffering — worker was missing
+  - type: worker
+    name: debugsphere-worker
+    runtime: node
+    rootDir: backend
+    buildCommand: chmod +x render-build.sh && bash render-build.sh
+    startCommand: node worker.js
+    plan: free
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: EXECUTION_TIMEOUT
+        value: 10000
+      - key: HOST_TEMP_DIR
+        value: /tmp/debugsphere
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: openai/gpt-oss-120b
+      - key: AI_TEMPERATURE
+        value: 1
+      - key: AI_TOP_P
+        value: 1
+      - key: AI_MAX_TOKENS
+        value: 4096
+      - key: AI_FIRST_CHUNK_TIMEOUT
+        value: 60000
+      - key: AI_IDLE_TIMEOUT
+        value: 30000
+      - key: AI_ENABLED
+        value: true
