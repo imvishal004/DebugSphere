@@ -3,8 +3,10 @@ const { Worker } = require("bullmq");
 const connectDB = require("./src/config/database");
 const { getRedisConnection } = require("./src/config/redis");
 const Execution = require("./src/models/Execution");
-const { executeInDocker } = require("./src/services/dockerManager");
-const { analyzeError } = require("./src/services/aiService"); // ← NEW
+const { analyzeError } = require("./src/services/aiService");
+
+// ✅ Only this line changed — dockerManager → isolatedExecutor
+const { executeInDocker } = require("./src/services/isolatedExecutor");
 
 const QUEUE_NAME = "code-execution";
 
@@ -22,14 +24,14 @@ async function startWorker() {
         // ── Step 1: Mark as running ───────────────────────────
         await Execution.findByIdAndUpdate(executionId, { status: "running" });
 
-        // ── Step 2: Execute code inside Docker ────────────────
+        // ── Step 2: Execute code inside isolated process ──────
         const result = await executeInDocker(language, code, input);
 
         // ── Step 3: Determine final status ───────────────────
         let finalStatus;
-        if (result.timedOut)        finalStatus = "timeout";
+        if (result.timedOut)            finalStatus = "timeout";
         else if (result.exitCode === 0) finalStatus = "completed";
-        else                        finalStatus = "failed";
+        else                            finalStatus = "failed";
 
         // ── Step 4: Build base update payload ─────────────────
         const updatePayload = {
@@ -65,7 +67,9 @@ async function startWorker() {
           (result.stderr || result.exitCode !== 0);
 
         if (shouldAnalyze) {
-          console.log(`🤖  Triggering AI analysis for execution ${executionId}`);
+          console.log(
+            `🤖  Triggering AI analysis for execution ${executionId}`
+          );
 
           const aiResult = await analyzeError({
             language,
@@ -105,9 +109,12 @@ async function startWorker() {
         // the execution write and the AI write
         await Execution.findByIdAndUpdate(executionId, updatePayload);
 
-        console.log(`✅  Job ${job.id} finished in ${result.executionTime}ms`);
+        console.log(
+          `✅  Job ${job.id} finished in ${result.executionTime}ms`
+        );
+
       } catch (err) {
-        // Infrastructure-level failure (Docker crash, OOM, etc.)
+        // Infrastructure-level failure (process crash, OOM, etc.)
         // Not a user code error — do NOT trigger AI analysis
         console.error(`❌  Job ${job.id} crashed:`, err.message);
         await Execution.findByIdAndUpdate(executionId, {

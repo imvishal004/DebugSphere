@@ -1,27 +1,34 @@
+// backend/src/config/redis.js
+// Updated to use REDIS_URL (Upstash) instead of REDIS_HOST + REDIS_PORT
+
 const IORedis = require("ioredis");
 
-let connection = null;
+let redisClient = null;
 
 function getRedisConnection() {
-  if (!connection) {
-    const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+  if (redisClient) return redisClient;
 
-    connection = new IORedis(redisUrl, {
-      maxRetriesPerRequest: null,
-
-      tls: {},   // ⭐ REQUIRED for Upstash
+  // Use REDIS_URL if available (Upstash / cloud)
+  // Fall back to host + port for local development
+  if (process.env.REDIS_URL) {
+    redisClient = new IORedis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: null,   // required by BullMQ
+      enableReadyCheck:     false,  // required for Upstash
+      tls:                  {},     // required for Upstash TLS
     });
-
-    connection.on("connect", () =>
-      console.log("🔴 Redis connected")
-    );
-
-    connection.on("error", (err) =>
-      console.error("Redis error:", err.message)
-    );
+  } else {
+    redisClient = new IORedis({
+      host: process.env.REDIS_HOST || "localhost",
+      port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+      maxRetriesPerRequest: null,
+      enableReadyCheck:     false,
+    });
   }
 
-  return connection;
+  redisClient.on("connect", () => console.log("🔴  Redis connected"));
+  redisClient.on("error",   (err) => console.error("❌  Redis error:", err.message));
+
+  return redisClient;
 }
 
 module.exports = { getRedisConnection };
