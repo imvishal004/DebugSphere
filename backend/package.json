@@ -4,11 +4,10 @@
   "description": "DebugSphere API & Worker",
   "main": "server.js",
   "scripts": {
-    "start": "node start.js server",
-    "dev": "nodemon server.js",
-    "worker": "node start.js worker",
-    "worker:dev": "nodemon worker.js",
-    "dev:all": "concurrently \"npm run dev\" \"npm run worker:dev\""
+    "start": "node start.js",
+    "dev": "node server.js",
+    "dev:all": "node server.js",
+    "worker:dev": "node worker.js"
   },
   "engines": {
     "node": ">=20.0.0"

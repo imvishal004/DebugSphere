@@ -1,193 +1,149 @@
 // ─────────────────────────────────────────────────────────────
 // start.js
 //
-// Node.js startup script for Render free tier.
-// Replaces start.sh (bash not reliable on Render free tier).
-//
-// What it does:
-//   1. Downloads portable OpenJDK to /tmp/jdk if not present
-//   2. Sets JAVA_HOME + PATH environment variables
-//   3. Creates /tmp/debugsphere temp directory
-//   4. Spawns the actual service (server.js or worker.js)
-//
-// Usage:
-//   node start.js server   → starts API server
-//   node start.js worker   → starts BullMQ worker
-//
-// Java source: Adoptium (Eclipse Temurin) portable JDK
-//   No apt required — pure HTTP download + tar extract
+// Render free tier startup script.
+// Downloads portable OpenJDK 17 to /tmp/jdk at runtime
+// (apt-get is not available on Render free tier).
+// Then starts server.js which includes the worker.
 // ─────────────────────────────────────────────────────────────
 
-const https    = require("https");
-const http     = require("http");
-const fs       = require("fs");
-const path     = require("path");
-const os       = require("os");
+const https   = require("https");
+const http    = require("http");
+const fs      = require("fs");
+const path    = require("path");
+const os      = require("os");
 const { spawn, execSync } = require("child_process");
-const zlib     = require("zlib");
-const tar      = require("tar"); // installed via npm
 
-const SERVICE = process.argv[2] || "server";
+// tar package handles .tar.gz extraction
+let tar;
+try {
+  tar = require("tar");
+} catch {
+  console.error("[start.js] ❌  'tar' package not found. Run: npm install tar");
+  process.exit(1);
+}
 
-// ── Configuration ──────────────────────────────────────────
-const JDK_DIR      = "/tmp/jdk";
-const JDK_MARKER   = "/tmp/jdk/.ready";  // exists when JDK is installed
-const DEBUGSPHERE_TMP = "/tmp/debugsphere";
+// ── Config ─────────────────────────────────────────────────
+const JDK_DIR    = "/tmp/jdk";
+const JDK_MARKER = "/tmp/jdk/.ready";
+const TMP_DIR    = "/tmp/debugsphere";
+const JDK_TAR    = "/tmp/jdk17.tar.gz";
 
-// Adoptium Temurin 17 — Linux x64 portable JDK
-// This is a stable, trusted OpenJDK distribution
+// Adoptium Temurin 17 — stable portable JDK for Linux x64
 const JDK_URL =
   "https://github.com/adoptium/temurin17-binaries/releases/download/" +
   "jdk-17.0.11%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.11_9.tar.gz";
 
-const JDK_TAR = "/tmp/jdk17.tar.gz";
-
-// ── Logging helpers ────────────────────────────────────────
 function log(msg)  { console.log(`[start.js] ${msg}`); }
 function warn(msg) { console.warn(`[start.js] ⚠️  ${msg}`); }
-function err(msg)  { console.error(`[start.js] ❌  ${msg}`); }
 
-// ── Check if Java is already in PATH ──────────────────────
+// ── Check if javac is available ────────────────────────────
 function javaInPath() {
   try {
-    const result = execSync("javac -version 2>&1", {
-      encoding: "utf8",
-      timeout:  5000,
-    });
-    log(`javac found in PATH: ${result.trim()}`);
+    execSync("javac -version 2>&1", { timeout: 5000 });
     return true;
   } catch {
     return false;
   }
 }
 
-// ── Check if we already downloaded JDK ────────────────────
-function jdkAlreadyInstalled() {
-  return fs.existsSync(JDK_MARKER);
+// ── Check if JDK already downloaded ───────────────────────
+function jdkReady() {
+  return fs.existsSync(JDK_MARKER) &&
+         fs.existsSync(path.join(JDK_DIR, "bin", "javac"));
 }
 
-// ── Download file to disk ──────────────────────────────────
-function downloadFile(url, destPath) {
+// ── Download file ──────────────────────────────────────────
+function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
-    log(`Downloading: ${url}`);
-    log(`         to: ${destPath}`);
+    log(`Downloading JDK (~185MB) — this takes ~30-60s...`);
+    const file = fs.createWriteStream(dest);
 
-    const file = fs.createWriteStream(destPath);
-    let downloaded = 0;
-
-    function doRequest(requestUrl) {
-      const protocol = requestUrl.startsWith("https") ? https : http;
-
-      protocol.get(requestUrl, (res) => {
-        // Handle redirects (GitHub releases use redirects)
+    function request(u) {
+      const mod = u.startsWith("https") ? https : http;
+      mod.get(u, (res) => {
+        // Follow redirects
         if (res.statusCode === 301 || res.statusCode === 302) {
-          const redirectUrl = res.headers.location;
-          log(`Redirect → ${redirectUrl}`);
-          doRequest(redirectUrl);
-          return;
+          return request(res.headers.location);
         }
-
         if (res.statusCode !== 200) {
-          reject(new Error(`Download failed: HTTP ${res.statusCode}`));
-          return;
+          return reject(new Error(`HTTP ${res.statusCode} from ${u}`));
         }
 
+        let downloaded = 0;
         const total = parseInt(res.headers["content-length"] || "0", 10);
 
         res.on("data", (chunk) => {
           downloaded += chunk.length;
           if (total > 0) {
             const pct = Math.round((downloaded / total) * 100);
-            if (pct % 20 === 0) {
-              log(`  Download progress: ${pct}% (${Math.round(downloaded / 1024 / 1024)}MB)`);
+            if (pct % 25 === 0) {
+              log(`  ${pct}% (${Math.round(downloaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`);
             }
           }
         });
 
         res.pipe(file);
-
         file.on("finish", () => {
           file.close();
-          log(`Download complete: ${Math.round(downloaded / 1024 / 1024)}MB`);
+          log(`Download complete`);
           resolve();
         });
-      }).on("error", (e) => {
-        fs.unlink(destPath, () => {});
-        reject(e);
-      });
+        file.on("error", reject);
+      }).on("error", reject);
     }
 
-    doRequest(url);
+    request(url);
   });
 }
 
-// ── Extract tar.gz ────────────────────────────────────────
+// ── Extract tar.gz ─────────────────────────────────────────
 function extractTar(tarPath, destDir) {
   return new Promise((resolve, reject) => {
-    log(`Extracting ${tarPath} to ${destDir}...`);
+    log(`Extracting JDK...`);
     fs.mkdirSync(destDir, { recursive: true });
-
-    tar.extract({
-      file:  tarPath,
-      cwd:   destDir,
-      strip: 1,        // strip the top-level jdk-17.x.x+9/ folder
-    })
-    .then(() => {
-      log("Extraction complete");
-      resolve();
-    })
-    .catch(reject);
+    tar.extract({ file: tarPath, cwd: destDir, strip: 1 })
+      .then(() => { log("Extraction complete"); resolve(); })
+      .catch(reject);
   });
 }
 
-// ── Install JDK ────────────────────────────────────────────
+// ── Install JDK to /tmp/jdk ────────────────────────────────
 async function installJDK() {
-  log("Installing portable OpenJDK 17 to /tmp/jdk...");
-
-  // Ensure directories exist
-  fs.mkdirSync(JDK_DIR, { recursive: true });
-
-  // Download
   await downloadFile(JDK_URL, JDK_TAR);
-
-  // Extract
   await extractTar(JDK_TAR, JDK_DIR);
 
-  // Cleanup tar file to save space
+  // Remove tar to free space
   try { fs.unlinkSync(JDK_TAR); } catch { /* ignore */ }
 
-  // Write marker file
+  // Write ready marker
   fs.writeFileSync(JDK_MARKER, new Date().toISOString());
-
-  log(`JDK installed at ${JDK_DIR}`);
+  log(`JDK ready at ${JDK_DIR}`);
 }
 
-// ── Set JAVA_HOME and PATH ─────────────────────────────────
-function configureJavaEnv() {
-  const javaBin = path.join(JDK_DIR, "bin");
-
+// ── Set JAVA_HOME and update PATH ──────────────────────────
+function configureJava() {
+  const bin = path.join(JDK_DIR, "bin");
   process.env.JAVA_HOME = JDK_DIR;
-  process.env.PATH      = `${javaBin}:${process.env.PATH}`;
+  process.env.PATH      = `${bin}:${process.env.PATH}`;
 
   log(`JAVA_HOME = ${JDK_DIR}`);
-  log(`PATH      = ${process.env.PATH.slice(0, 100)}...`);
 
-  // Verify
   try {
-    const v = execSync(`${path.join(javaBin, "javac")} -version 2>&1`, {
+    const v = execSync(`${path.join(bin, "javac")} -version 2>&1`, {
       encoding: "utf8",
       timeout:  5000,
-    });
-    log(`✅  javac verified: ${v.trim()}`);
+      env:      process.env,
+    }).trim();
+    log(`✅  javac: ${v}`);
   } catch (e) {
-    warn(`javac verification failed: ${e.message}`);
+    warn(`javac check failed: ${e.message}`);
   }
 }
 
-// ── Runtime summary ────────────────────────────────────────
-function printRuntimeSummary() {
-  log("── Runtime Summary ─────────────────────");
-
+// ── Print runtime summary ──────────────────────────────────
+function printSummary() {
+  log("── Runtime ─────────────────────────────────");
   const checks = [
     ["node",    "node --version"],
     ["python3", "python3 --version"],
@@ -195,7 +151,6 @@ function printRuntimeSummary() {
     ["java",    "java -version"],
     ["g++",     "g++ --version"],
   ];
-
   for (const [name, cmd] of checks) {
     try {
       const out = execSync(`${cmd} 2>&1`, {
@@ -208,15 +163,14 @@ function printRuntimeSummary() {
       log(`  ❌  ${name}: NOT FOUND`);
     }
   }
-
-  log("────────────────────────────────────────");
+  log("────────────────────────────────────────────");
 }
 
-// ── Start Node.js service ──────────────────────────────────
-function startService(serviceName) {
-  const serviceFile = path.join(__dirname, `${serviceName}.js`);
-
-  log(`Starting: node ${serviceName}.js`);
+// ── Start server.js ────────────────────────────────────────
+// Always starts server.js — worker is merged into it
+function startServer() {
+  const serviceFile = path.join(__dirname, "server.js");
+  log(`Starting: node server.js`);
 
   const child = spawn(process.execPath, [serviceFile], {
     stdio: "inherit",
@@ -225,23 +179,18 @@ function startService(serviceName) {
   });
 
   child.on("exit", (code, signal) => {
-    if (signal) {
-      log(`Service killed by signal: ${signal}`);
-      process.exit(1);
-    }
-    log(`Service exited with code: ${code}`);
+    log(`server.js exited — code: ${code} signal: ${signal}`);
     process.exit(code || 0);
   });
 
   child.on("error", (e) => {
-    err(`Failed to start ${serviceName}.js: ${e.message}`);
+    console.error(`[start.js] Failed to start server.js: ${e.message}`);
     process.exit(1);
   });
 
-  // Forward signals to child
   ["SIGTERM", "SIGINT"].forEach((sig) => {
     process.on(sig, () => {
-      log(`Received ${sig} — forwarding to service`);
+      log(`${sig} received — shutting down`);
       child.kill(sig);
     });
   });
@@ -249,43 +198,39 @@ function startService(serviceName) {
 
 // ── Main ───────────────────────────────────────────────────
 async function main() {
-  log(`════════════════════════════════════════`);
-  log(`  DebugSphere — service: ${SERVICE}`);
+  log("════════════════════════════════════════════");
+  log("  DebugSphere startup");
   log(`  Node: ${process.version}`);
   log(`  Platform: ${os.platform()} ${os.arch()}`);
-  log(`════════════════════════════════════════`);
+  log("════════════════════════════════════════════");
 
   // Create temp dir for code execution
-  fs.mkdirSync(DEBUGSPHERE_TMP, { recursive: true });
-  log(`Temp dir ready: ${DEBUGSPHERE_TMP}`);
+  fs.mkdirSync(TMP_DIR, { recursive: true });
+  log(`Temp dir: ${TMP_DIR}`);
 
-  // Check if Java is already available
+  // Java setup
   if (javaInPath()) {
-    log("✅  Java already in PATH — skipping JDK download");
-  } else if (jdkAlreadyInstalled()) {
-    log("✅  JDK already downloaded — configuring environment");
-    configureJavaEnv();
+    log("✅  Java already in PATH");
+  } else if (jdkReady()) {
+    log("✅  JDK already downloaded — configuring...");
+    configureJava();
   } else {
     log("☕  Java not found — downloading portable JDK...");
     try {
       await installJDK();
-      configureJavaEnv();
+      configureJava();
     } catch (e) {
       warn(`JDK download failed: ${e.message}`);
-      warn("Java execution will not work on this instance.");
-      warn("Other languages (Python, JS, C++) will still work.");
+      warn("Java execution will not work.");
+      warn("Python, JavaScript, C++ will still work.");
     }
   }
 
-  // Print runtime summary
-  printRuntimeSummary();
-
-  // Start the actual service
-  startService(SERVICE);
+  printSummary();
+  startServer();
 }
 
 main().catch((e) => {
-  err(`Fatal startup error: ${e.message}`);
-  console.error(e);
+  console.error(`[start.js] Fatal: ${e.message}`);
   process.exit(1);
 });

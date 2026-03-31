@@ -1,8 +1,8 @@
 # render.yaml — project root
+# Single web service — API + worker in same process
 
 services:
 
-  # ── Backend API ─────────────────────────────────────────
   - type: web
     name: debugsphere-api
     runtime: node
@@ -27,45 +27,6 @@ services:
         sync: false
       - key: JWT_EXPIRES_IN
         value: 7d
-      - key: EXECUTION_TIMEOUT
-        value: 10000
-      - key: HOST_TEMP_DIR
-        value: /tmp/debugsphere
-      - key: NVIDIA_API_KEY
-        sync: false
-      - key: AI_MODEL
-        value: openai/gpt-oss-120b
-      - key: AI_TEMPERATURE
-        value: 1
-      - key: AI_TOP_P
-        value: 1
-      - key: AI_MAX_TOKENS
-        value: 4096
-      - key: AI_FIRST_CHUNK_TIMEOUT
-        value: 60000
-      - key: AI_IDLE_TIMEOUT
-        value: 30000
-      - key: AI_ENABLED
-        value: true
-
-  # ── Worker Service ───────────────────────────────────────
-  - type: worker
-    name: debugsphere-worker
-    runtime: node
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: node start.js worker
-    plan: free
-
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: MONGODB_URI
-        sync: false
-      - key: REDIS_URL
-        sync: false
-      - key: JWT_SECRET
-        sync: false
       - key: EXECUTION_TIMEOUT
         value: 10000
       - key: HOST_TEMP_DIR

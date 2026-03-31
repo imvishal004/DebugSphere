@@ -1,17 +1,22 @@
 require("dotenv").config();
-const { Worker } = require("bullmq");
-const connectDB = require("./src/config/database");
+const { Worker }       = require("bullmq");
+const connectDB        = require("./src/config/database");
 const { getRedisConnection } = require("./src/config/redis");
-const Execution = require("./src/models/Execution");
+const Execution        = require("./src/models/Execution");
 const { analyzeError } = require("./src/services/aiService");
-
-// ✅ Only this line changed — dockerManager → isolatedExecutor
 const { executeInDocker } = require("./src/services/isolatedExecutor");
 
 const QUEUE_NAME = "code-execution";
 
+// ── startWorker ────────────────────────────────────────────
+// Exported so server.js can call it after boot.
+// When running standalone (node worker.js), the bottom
+// of this file calls startWorker() directly.
 async function startWorker() {
+  // connectDB is safe to call multiple times —
+  // database.js guards against duplicate connections
   await connectDB();
+
   const connection = getRedisConnection();
 
   const worker = new Worker(
@@ -21,19 +26,21 @@ async function startWorker() {
       console.log(`⚙️  Processing job ${job.id} | execution ${executionId}`);
 
       try {
-        // ── Step 1: Mark as running ───────────────────────────
-        await Execution.findByIdAndUpdate(executionId, { status: "running" });
+        // ── Step 1: Mark as running ───────────────────────
+        await Execution.findByIdAndUpdate(executionId, {
+          status: "running",
+        });
 
-        // ── Step 2: Execute code inside isolated process ──────
+        // ── Step 2: Execute code ──────────────────────────
         const result = await executeInDocker(language, code, input);
 
-        // ── Step 3: Determine final status ───────────────────
+        // ── Step 3: Determine final status ────────────────
         let finalStatus;
         if (result.timedOut)            finalStatus = "timeout";
         else if (result.exitCode === 0) finalStatus = "completed";
         else                            finalStatus = "failed";
 
-        // ── Step 4: Build base update payload ─────────────────
+        // ── Step 4: Build update payload ──────────────────
         const updatePayload = {
           status:      finalStatus,
           output:      result.stdout,
@@ -43,24 +50,7 @@ async function startWorker() {
           completedAt: new Date(),
         };
 
-        // ── Step 5: AI analysis (only on user code failures) ──
-        //
-        // Trigger conditions (ALL must be true):
-        //   A. finalStatus === "failed"
-        //      → excludes "timeout" (no error to analyze)
-        //      → excludes "completed" (no error occurred)
-        //
-        //   B. !result.timedOut
-        //      → redundant with A but explicit for clarity
-        //
-        //   C. result.stderr has content OR exitCode is non-zero
-        //      → catches cases where stderr is empty but code crashed
-        //
-        // We do NOT trigger AI for:
-        //   • Timeout: "your code timed out" is self-explanatory
-        //   • Infrastructure errors: caught in the catch block below
-        //   • Successful runs: nothing to debug
-
+        // ── Step 5: AI analysis on failure ────────────────
         const shouldAnalyze =
           finalStatus === "failed" &&
           !result.timedOut &&
@@ -78,9 +68,6 @@ async function startWorker() {
             exitCode: result.exitCode,
           });
 
-          // Build aiDebug payload regardless of AI success/failure
-          // If AI failed, we store the error reason so the frontend
-          // can show a graceful message instead of empty space
           updatePayload.aiDebug = {
             triggered:   true,
             explanation: aiResult.explanation,
@@ -94,7 +81,7 @@ async function startWorker() {
           if (aiResult.success) {
             console.log(
               `✅  AI analysis complete for ${executionId} ` +
-              `(${aiResult.tokensUsed} tokens, model: ${aiResult.model})`
+              `(${aiResult.tokensUsed} tokens)`
             );
           } else {
             console.warn(
@@ -103,10 +90,7 @@ async function startWorker() {
           }
         }
 
-        // ── Step 6: Persist everything in one DB write ────────
-        // Single atomic update — execution result + AI data together
-        // Prevents a race condition where frontend polls between
-        // the execution write and the AI write
+        // ── Step 6: Persist result ────────────────────────
         await Execution.findByIdAndUpdate(executionId, updatePayload);
 
         console.log(
@@ -114,20 +98,17 @@ async function startWorker() {
         );
 
       } catch (err) {
-        // Infrastructure-level failure (process crash, OOM, etc.)
-        // Not a user code error — do NOT trigger AI analysis
         console.error(`❌  Job ${job.id} crashed:`, err.message);
         await Execution.findByIdAndUpdate(executionId, {
           status:      "failed",
           error:       err.message,
           completedAt: new Date(),
-          // aiDebug intentionally omitted — not a code error
         });
       }
     },
     {
       connection,
-      concurrency: 5,
+      concurrency: 3,           // reduced from 5 — single instance now
       limiter: { max: 10, duration: 1000 },
     }
   );
@@ -135,11 +116,24 @@ async function startWorker() {
   worker.on("completed", (job) =>
     console.log(`🏁  Job ${job.id} completed`)
   );
+
   worker.on("failed", (job, err) =>
     console.error(`💥  Job ${job?.id} failed:`, err.message)
   );
 
   console.log("🔄  Worker listening for jobs …");
+
+  return worker;
 }
 
-startWorker().catch(console.error);
+module.exports = { startWorker };
+
+// ── Standalone mode ────────────────────────────────────────
+// Allows running: node worker.js directly for local dev.
+// When imported by server.js, this block does NOT run.
+if (require.main === module) {
+  startWorker().catch((err) => {
+    console.error("❌  Worker startup failed:", err.message);
+    process.exit(1);
+  });
+}
