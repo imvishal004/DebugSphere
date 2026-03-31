@@ -91,6 +91,8 @@ app.use(errorHandler);
     console.log(`    REDIS:        ${process.env.REDIS_URL   ? "configured" : "NOT SET (local)"}`);
     console.log(`    AI:           ${process.env.AI_ENABLED  === "false" ? "disabled" : "enabled"}`);
   });
+
+  require("./worker");
 })();
 
 module.exports = app;
